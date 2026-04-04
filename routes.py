@@ -8,7 +8,7 @@ routes = Blueprint("routes", __name__)
 WEBHOOK_CONFIG = [
     {"num": 1, "symbol": "nifty"},
     {"num": 2, "symbol": "gift_nifty"},
-    {"num": 3, "symbol": "bank_nifty"},
+    {"num": 3, "symbol": "bitcoin"},
 ]
 
 def get_config(num):
