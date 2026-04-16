@@ -174,10 +174,6 @@ def generate_access_token(totp: str):
             "message": str(e)
         }
     
-
-# # ---------------------------------------
-# # OPTIONAL: CLI MODE (for manual testing)
-# # ---------------------------------------
 # if __name__ == "__main__":
 #     totp = input("Enter TOTP (6-digit code): ").strip()
 
