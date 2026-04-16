@@ -7,6 +7,8 @@ from dhanhq import marketfeed
 from datetime import datetime
 from websockets.exceptions import ConnectionClosedError
 
+from config import load_keys  # ✅ NEW
+
 TEST_LOG = False
 RECONNECT_DELAY = 3
 
@@ -16,8 +18,20 @@ def log(msg):
 
 load_dotenv()
 
-CLIENT_ID = os.getenv("CLIENT_ID")
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
+# ❌ REMOVE OLD STATIC VALUES
+# CLIENT_ID = os.getenv("CLIENT_ID")
+# ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
+
+# ✅ NEW FUNCTION (dynamic token fetch)
+def get_credentials():
+    data = load_keys()
+    if not data:
+        return None, None
+
+    return data.get("dhanClientId"), data.get("accessToken")
+
 
 ALLOWED_SECURITIES = {
     "13": [(marketfeed.IDX, "13", marketfeed.Ticker), (marketfeed.IDX, "13", marketfeed.Quote)],
@@ -28,42 +42,76 @@ ALLOWED_SECURITIES = {
 
 SUBSCRIBERS = { (sid, mode): set() for sid in ALLOWED_SECURITIES for mode in ("ticker", "quote") }
 
+
 def build_instruments():
     ins = []
-    for subs in ALLOWED_SECURITIES.values(): ins.extend(subs)
+    for subs in ALLOWED_SECURITIES.values():
+        ins.extend(subs)
     return ins
+
 
 class FeedManager:
     def start(self):
         log("FeedManager started")
+
         while True:
             try:
+                # ✅ GET LATEST TOKEN EVERY TIME
+                CLIENT_ID, ACCESS_TOKEN = get_credentials()
+
+                if not CLIENT_ID or not ACCESS_TOKEN:
+                    log("❌ Missing token. Waiting...")
+                    time.sleep(5)
+                    continue
+
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-                feed = marketfeed.DhanFeed(CLIENT_ID, ACCESS_TOKEN, build_instruments(), version="v2")
+
+                feed = marketfeed.DhanFeed(
+                    CLIENT_ID,
+                    ACCESS_TOKEN,
+                    build_instruments(),
+                    version="v2"
+                )
+
                 feed.run_forever()
                 log("Feed connected")
+
                 while True:
                     msg = feed.get_data()
                     print(msg)
-                    if not msg: continue
+
+                    if not msg:
+                        continue
+
                     sid = str(msg.get("security_id"))
                     mtype = msg.get("type")
-                    if mtype == "Ticker Data": key = (sid, "ticker")
-                    elif mtype == "Quote Data": key = (sid, "quote")
-                    else: continue
-                    for cb in list(SUBSCRIBERS.get(key, [])): cb(msg)
+
+                    if mtype == "Ticker Data":
+                        key = (sid, "ticker")
+                    elif mtype == "Quote Data":
+                        key = (sid, "quote")
+                    else:
+                        continue
+
+                    for cb in list(SUBSCRIBERS.get(key, [])):
+                        cb(msg)
+
             except ConnectionClosedError:
-                log("Feed disconnected, reconnecting")
+                log("Feed disconnected, reconnecting...")
                 time.sleep(RECONNECT_DELAY)
+
             except Exception as e:
                 log(f"Error: {e}")
                 time.sleep(RECONNECT_DELAY)
 
+
 feed_manager = FeedManager()
+
 
 def start_feed_thread():
     if os.environ.get("RUN_MAIN") not in (None, "true"):
         return
+
     t = threading.Thread(target=feed_manager.start, daemon=True)
     t.start()
