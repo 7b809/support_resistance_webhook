@@ -3,10 +3,17 @@ import json
 import requests
 from dotenv import load_dotenv
 
+# ✅ Mongo (safe import)
+try:
+    from pymongo import MongoClient
+except:
+    MongoClient = None
+
 # Load environment variables
 load_dotenv()
 
 KEYS_FILE = "keys_data.json"
+MONGO_URI = os.getenv("MONGO_URI")
 
 REQUIRED_KEYS = [
     "dhanClientId",
@@ -17,26 +24,59 @@ REQUIRED_KEYS = [
 
 
 # -------------------------------------------------
-# SAVE TOKEN (CLEAN + SAFE)
+# SAVE TOKEN (CLEAN + SAFE + MONGO)
 # -------------------------------------------------
 def save_keys(data: dict):
+    # ✅ EXISTING LOGIC (UNCHANGED)
     try:
         with open(KEYS_FILE, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
         print(f"❌ Failed to save keys: {e}")
 
+    # ✅ NEW: Save to MongoDB (no logic change)
+    if MONGO_URI and MongoClient:
+        try:
+            client = MongoClient(MONGO_URI)
+            db = client["trading"]
+            collection = db["auth"]
+
+            collection.update_one(
+                {"_id": "dhan_token"},
+                {"$set": data},
+                upsert=True
+            )
+
+            print("✅ Token saved to MongoDB")
+
+        except Exception as e:
+            print(f"❌ MongoDB save error: {e}")
+
 
 # -------------------------------------------------
 # DELETE TOKEN (FOR INVALID CASES)
 # -------------------------------------------------
 def delete_keys():
+    # ✅ EXISTING LOGIC (UNCHANGED)
     try:
         if os.path.exists(KEYS_FILE):
             os.remove(KEYS_FILE)
             print("🗑️ Invalid keys_data.json removed")
     except Exception as e:
         print(f"❌ Failed to delete keys file: {e}")
+
+    # ✅ NEW: Delete from MongoDB also
+    if MONGO_URI and MongoClient:
+        try:
+            client = MongoClient(MONGO_URI)
+            db = client["trading"]
+            collection = db["auth"]
+
+            collection.delete_one({"_id": "dhan_token"})
+            print("🗑️ Token removed from MongoDB")
+
+        except Exception as e:
+            print(f"❌ MongoDB delete error: {e}")
 
 
 # -------------------------------------------------
@@ -120,7 +160,7 @@ def generate_access_token(totp: str):
 
         save_keys(clean_data)
 
-        print("✅ Access token generated and saved to keys_data.json")
+        print("✅ Access token generated and saved")
 
         return {
             "status": "success",

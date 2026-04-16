@@ -79,7 +79,6 @@ class FeedManager:
 
                 while True:
                     msg = feed.get_data()
-                    print(msg)
 
                     if not msg:
                         continue
