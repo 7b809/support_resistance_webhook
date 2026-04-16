@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
-import asyncio,os
+import asyncio, os
 
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
@@ -12,7 +12,6 @@ from feed_manager import (
     SUBSCRIBERS,
     start_feed_thread,
 )
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -35,7 +34,6 @@ app = FastAPI(
     title="Dhan Market Dashboard",
     lifespan=lifespan,
 )
-
 
 # -------------------------------------------------
 # MIDDLEWARE
@@ -78,23 +76,22 @@ def generate_token(totp: str = Form(...)):
 
 
 # -------------------------------------------------
-# DASHBOARD (ONLY ONE!)
+# HOME (REPLACED DASHBOARD)
 # -------------------------------------------------
-@app.get("/", response_class=HTMLResponse)
-def dashboard(request: Request):
+@app.get("/")
+def home():
     data = load_keys()
     expiry = data.get("expiryTime") if isinstance(data, dict) else None
 
-    securities_list = [str(k) for k in ALLOWED_SECURITIES.keys()]
+    return {
+        "status": "running",
+        "message": "Dhan Market API is live",
+        "token_valid": is_token_valid(),
+        "expiry_time": str(expiry) if expiry else "None",
+        "available_securities": list(ALLOWED_SECURITIES.keys()),
+        "websocket_example": "/ws/{security_id}/quote"
+    }
 
-    return templates.TemplateResponse(
-        name="index.html",   # ✅ explicitly named param
-        context={
-            "request": request,
-            "securities": securities_list,
-            "expiry_time": str(expiry) if expiry else "None"
-        }
-    )
 
 # -------------------------------------------------
 # INFO
