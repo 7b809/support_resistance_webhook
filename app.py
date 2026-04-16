@@ -16,9 +16,7 @@ from feed_manager import (
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-templates = Jinja2Templates(
-    directory=os.path.join(BASE_DIR, "templates")
-)
+templates = Jinja2Templates(directory="templates")
 
 # -------------------------------------------------
 # LIFESPAN
@@ -82,26 +80,21 @@ def generate_token(totp: str = Form(...)):
 # -------------------------------------------------
 # DASHBOARD (ONLY ONE!)
 # -------------------------------------------------
-# app.py
-
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     data = load_keys()
     expiry = data.get("expiryTime") if isinstance(data, dict) else None
 
-    # Force cast keys to a plain list of strings
-    # This ensures Jinja doesn't touch the complex list/tuple values
     securities_list = [str(k) for k in ALLOWED_SECURITIES.keys()]
 
-    context = {
-        "request": request,
-        "securities": securities_list,  # Use the cleaned list
-        "expiry_time": str(expiry) if expiry else "None"
-    }
-
-    print("DEBUG CONTEXT:", context)
-    return templates.TemplateResponse("index.html", context)
-
+    return templates.TemplateResponse(
+        name="index.html",   # ✅ explicitly named param
+        context={
+            "request": request,
+            "securities": securities_list,
+            "expiry_time": str(expiry) if expiry else "None"
+        }
+    )
 
 # -------------------------------------------------
 # INFO
