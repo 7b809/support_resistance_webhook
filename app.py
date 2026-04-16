@@ -102,7 +102,7 @@ def dashboard(request: Request):
 
     print("DEBUG CONTEXT:", context)
 
-    return templates.TemplateResponse("dashboard.html", context)
+    return templates.TemplateResponse("index.html", context)
 
 
 # -------------------------------------------------
