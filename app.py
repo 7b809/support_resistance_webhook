@@ -82,26 +82,24 @@ def generate_token(totp: str = Form(...)):
 # -------------------------------------------------
 # DASHBOARD (ONLY ONE!)
 # -------------------------------------------------
+# app.py
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard(request: Request):
     data = load_keys()
+    expiry = data.get("expiryTime") if isinstance(data, dict) else None
 
-    expiry = None
-    if isinstance(data, dict):
-        expiry = data.get("expiryTime")
-
-    # ✅ FORCE CLEAN DATA
-    securities = list(ALLOWED_SECURITIES.keys())
-    securities = [str(s) for s in securities]   # 🔥 IMPORTANT
+    # Force cast keys to a plain list of strings
+    # This ensures Jinja doesn't touch the complex list/tuple values
+    securities_list = [str(k) for k in ALLOWED_SECURITIES.keys()]
 
     context = {
         "request": request,
-        "securities": securities,
-        "expiry_time": str(expiry) if expiry else None
+        "securities": securities_list,  # Use the cleaned list
+        "expiry_time": str(expiry) if expiry else "None"
     }
 
     print("DEBUG CONTEXT:", context)
-
     return templates.TemplateResponse("index.html", context)
 
 
