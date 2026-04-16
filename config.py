@@ -50,7 +50,7 @@ def load_keys():
             print("❌ Error reading keys_data.json")
 
     # ✅ 2. Try MongoDB (if configured)
-    if mongo_collection:
+    if mongo_collection is not None:
         try:
             data = mongo_collection.find_one({"_id": "dhan_token"})
 
@@ -77,7 +77,7 @@ def save_keys(data):
         print(f"❌ Failed to save file: {e}")
 
     # ✅ Save to MongoDB
-    if mongo_collection:
+    if mongo_collection is not None:
         try:
             mongo_collection.update_one(
                 {"_id": "dhan_token"},
