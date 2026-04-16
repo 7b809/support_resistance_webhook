@@ -2,7 +2,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
-import asyncio
+import asyncio,os
 
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
@@ -13,8 +13,12 @@ from feed_manager import (
     start_feed_thread,
 )
 
-templates = Jinja2Templates(directory="templates")
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+templates = Jinja2Templates(
+    directory=os.path.join(BASE_DIR, "templates")
+)
 
 # -------------------------------------------------
 # LIFESPAN
