@@ -40,8 +40,7 @@ app = FastAPI(
 # -------------------------------------------------
 @app.middleware("http")
 async def check_token_middleware(request: Request, call_next):
-    public_paths = ["/token", "/generate-token", "/favicon.ico"]
-
+    public_paths = ["/", "/token", "/generate-token", "/favicon.ico"]
     if request.url.path not in public_paths:
         if not is_token_valid():
             return RedirectResponse(url="/token")
