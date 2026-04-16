@@ -83,15 +83,21 @@ def dashboard(request: Request):
     data = load_keys()
 
     expiry = None
-    if data and isinstance(data, dict):
+    if isinstance(data, dict):
         expiry = data.get("expiryTime")
+
+    # ✅ FORCE CLEAN DATA
+    securities = list(ALLOWED_SECURITIES.keys())
+    securities = [str(s) for s in securities]   # 🔥 IMPORTANT
 
     context = {
         "request": request,
-        "securities": list(ALLOWED_SECURITIES.keys()),
-        "expiry_time": expiry
+        "securities": securities,
+        "expiry_time": str(expiry) if expiry else None
     }
-    print("DEBUG TEMPLATE CONTEXT:", context)
+
+    print("DEBUG CONTEXT:", context)
+
     return templates.TemplateResponse("dashboard.html", context)
 
 
