@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Dashboard</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+  body {
+    background: #f5f7fb;
+    color: #1f2937;
+  }
+
+  h2 {
+    font-weight: 600;
+  }
+
+  .card {
+    background: #ffffff;
+    border-radius: 14px;
+    border: 1px solid #e5e7eb;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.06);
+  }
+
+  table {
+    border-collapse: separate;
+    border-spacing: 0 8px;
+  }
+
+  thead th {
+    border-bottom: none;
+    color: #6b7280;
+    font-weight: 600;
+  }
+
+  tbody tr {
+    background: #ffffff;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.04);
+  }
+
+  tbody tr:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.08);
+  }
+
+  tbody td {
+    border: none;
+    padding: 12px 14px;
+  }
+
+  .status-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 6px;
+  }
+
+  .live {
+    background: #22c55e;
+    animation: pulse 1.5s infinite;
+  }
+
+  .offline {
+    background: #ef4444;
+  }
+
+  .error {
+    background: #f97316;
+  }
+
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.6);
+    }
+    100% {
+      box-shadow: 0 0 0 12px rgba(34, 197, 94, 0);
+    }
+  }
+
+  .price-up {
+    color: #16a34a;
+    font-weight: 600;
+  }
+
+  .price-down {
+    color: #dc2626;
+    font-weight: 600;
+  }
+
+  .price-neutral {
+    color: #374151;
+    font-weight: 500;
+  }
+
+  .stale {
+    opacity: 0.55;
+  }
+
+  .badge-live {
+    background: #dcfce7;
+    color: #166534;
+  }
+
+  .badge-offline {
+    background: #fee2e2;
+    color: #7f1d1d;
+  }
+
+  .badge-error {
+    background: #ffedd5;
+    color: #7c2d12;
+  }
+</style>
+</head>
+
+<body>
+<div class="container py-4">
+<div class="card p-3 mb-3">
+  <div class="d-flex justify-content-between align-items-center">
+    <div>
+      <h6 class="mb-1">🔐 Token Status</h6>
+      <small class="text-muted">Session expiry countdown</small>
+    </div>
+    <div id="token-timer" class="fw-bold text-success">
+      Loading...
+    </div>
+  </div>
+</div>
+
+<h2 class="mb-4">📊 Dashboard</h2>
+
+<div class="card p-3">
+<table class="table align-middle mb-0">
+<thead>
+<tr>
+<th>Security</th>
+<th>Status</th>
+<th>LTP</th>
+<th>Last Time</th>
+</tr>
+</thead>
+<tbody>
+{% for sid in securities %}
+<tr id="row-{{sid}}">
+<td class="fw-semibold">{{sid}}</td>
+<td id="status-{{sid}}">
+<span class="status-dot offline"></span>
+<span class="badge badge-offline">Offline</span>
+</td>
+<td id="ltp-{{sid}}" class="price-neutral">--</td>
+<td id="ltt-{{sid}}">--</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- EXISTING WS SCRIPT (UNCHANGED) -->
+<script>
+const secs = {{ securities | tojson }};
+const lastPrice = {};
+
+secs.forEach(s => {
+const protocol = window.location.protocol === "https:" ? "wss://" : "ws://";
+const ws = new WebSocket(`${protocol}${window.location.host}/ws/${s}/quote`);
+
+  const row = document.getElementById(`row-${s}`);
+  const statusEl = document.getElementById(`status-${s}`);
+  const ltpEl = document.getElementById(`ltp-${s}`);
+  const lttEl = document.getElementById(`ltt-${s}`);
+
+  function setStatus(type, label, badgeClass) {
+    statusEl.innerHTML = `
+      <span class="status-dot ${type}"></span>
+      <span class="badge ${badgeClass}">${label}</span>
+    `;
+  }
+
+  ws.onopen = () => {
+    setStatus('live', 'Live', 'badge-live');
+    row.classList.remove('stale');
+  };
+
+  ws.onmessage = e => {
+    const d = JSON.parse(e.data);
+    const ltp = d.LTP;
+
+    if (lastPrice[s] !== undefined) {
+      if (ltp > lastPrice[s]) ltpEl.className = 'price-up';
+      else if (ltp < lastPrice[s]) ltpEl.className = 'price-down';
+      else ltpEl.className = 'price-neutral';
+    }
+
+    lastPrice[s] = ltp;
+    ltpEl.textContent = ltp ?? '--';
+    lttEl.textContent = d.LTT ?? '--';
+  };
+
+  ws.onerror = () => {
+    setStatus('error', 'Error', 'badge-error');
+    row.classList.add('stale');
+  };
+
+  ws.onclose = () => {
+    setStatus('offline', 'Offline', 'badge-offline');
+    row.classList.add('stale');
+  };
+});
+</script>
+
+<!-- ✅ FIXED TOKEN TIMER SCRIPT -->
+<script>
+const expiryTime = "{{ expiry_time }}";
+console.log("Expiry:", expiryTime);
+
+if (!expiryTime || expiryTime === "None") {
+  document.getElementById("token-timer").innerText = "No Token";
+} else {
+  startTokenTimer(expiryTime);
+}
+
+function startTokenTimer(expiry) {
+  const expiryDate = new Date(expiry + "Z");
+
+  function updateTimer() {
+    const now = new Date();
+    const diff = expiryDate - now;
+
+    const el = document.getElementById("token-timer");
+
+    if (diff <= 0) {
+      el.innerText = "Expired";
+      el.className = "fw-bold text-danger";
+      return;
+    }
+
+    const mins = Math.floor(diff / 60000);
+    const secs = Math.floor((diff % 60000) / 1000);
+
+    el.innerText = `${mins}m ${secs}s`;
+
+    if (mins < 5) el.className = "fw-bold text-danger";
+    else if (mins < 15) el.className = "fw-bold text-warning";
+    else el.className = "fw-bold text-success";
+  }
+
+  updateTimer();
+  setInterval(updateTimer, 1000);
+}
+</script>
+
+</body>
+</html>

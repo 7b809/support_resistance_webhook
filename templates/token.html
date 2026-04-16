@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Token Authentication</title>
+
+    <!-- Bootstrap CDN -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: #0f172a;
+            color: white;
+        }
+        .card {
+            border-radius: 12px;
+        }
+    </style>
+</head>
+
+<body class="d-flex align-items-center justify-content-center vh-100">
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-4">
+
+            <div class="card shadow-lg p-4">
+                <h3 class="text-center mb-3">🔐 Dhan Login</h3>
+
+                <form action="/generate-token" method="post">
+                    <div class="mb-3">
+                        <label class="form-label">Enter TOTP</label>
+                        <input 
+                            type="text" 
+                            name="totp" 
+                            class="form-control text-center"
+                            placeholder="6-digit code"
+                            maxlength="6"
+                            required
+                        >
+                    </div>
+
+                    <button class="btn btn-primary w-100">
+                        Generate Token
+                    </button>
+                </form>
+
+                <p class="text-center mt-3 text-muted" style="font-size: 12px;">
+                    Token required to start market feed
+                </p>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+
+</body>
+</html>

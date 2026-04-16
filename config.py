@@ -1,11 +1,50 @@
+import json
 import os
-from dotenv import load_dotenv
+from datetime import datetime
 
-load_dotenv()
+KEYS_FILE = "keys_data.json"
 
-class Config:
-    MONGO_URI = os.getenv("MONGO_URI")
-    DB_NAME = os.getenv("DB_NAME")
+REQUIRED_KEYS = [
+    "dhanClientId",
+    "dhanClientName",
+    "accessToken",
+    "expiryTime",
+]
 
-    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-    TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+
+def load_keys():
+    if not os.path.exists(KEYS_FILE):
+        return None
+
+    try:
+        with open(KEYS_FILE, "r") as f:
+            return json.load(f)
+    except Exception:
+        return None
+
+
+def is_token_valid():
+    data = load_keys()
+
+    if not data:
+        print("❌ keys_data.json missing or corrupted")
+        return False
+
+    # Check required keys
+    for key in REQUIRED_KEYS:
+        if key not in data or not data[key]:
+            print(f"❌ Missing or empty key: {key}")
+            return False
+
+    # Check expiry
+    try:
+        expiry_time = datetime.fromisoformat(data["expiryTime"])
+    except Exception:
+        print("❌ Invalid expiry format")
+        return False
+
+    if datetime.utcnow() >= expiry_time:
+        print("❌ Token expired")
+        return False
+
+    return True

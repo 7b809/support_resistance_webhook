@@ -1,5 +1,7 @@
-flask
-pymongo
+fastapi
+uvicorn
+dhanhq
 python-dotenv
-requests
-pytz
+jinja2
+websockets
+python-multipart
