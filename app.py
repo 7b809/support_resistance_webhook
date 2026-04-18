@@ -148,4 +148,4 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
         while True:
             await ws.receive_text()
     except WebSocketDisconnect:
-        SUBSCRIBERS[key].remove(sender)
+        SUBSCRIBERS[key].remove(sender) 
