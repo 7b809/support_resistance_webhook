@@ -14,6 +14,11 @@ load_dotenv()
 KEYS_FILE = "keys_data.json"
 MONGO_URI = os.getenv("MONGO_URI")
 
+
+BOT_TOKEN =  os.getenv("BOT_TOKEN",None)
+ALLOWED_CHAT_ID = os.getenv("CHAT_ID",None)
+
+
 REQUIRED_KEYS = [
     "dhanClientId",
     "dhanClientName",

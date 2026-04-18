@@ -6,6 +6,8 @@ import asyncio, os
 
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
+from telegram_bot import start_telegram_bot
+
 
 from feed_manager import (
     ALLOWED_SECURITIES,
@@ -22,11 +24,16 @@ templates = Jinja2Templates(directory="templates")
 # -------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+
+    # ✅ Start Telegram bot ALWAYS
+    start_telegram_bot()
+
     if is_token_valid():
         print("✅ Token valid. Starting feed...")
         start_feed_thread()
     else:
-        print("⚠️ Token invalid. Waiting for user input...")
+        print("⚠️ Waiting for TOTP from Telegram...")
+
     yield
 
 
@@ -43,8 +50,10 @@ async def check_token_middleware(request: Request, call_next):
     public_paths = ["/", "/token", "/generate-token", "/favicon.ico"]
     if request.url.path not in public_paths:
         if not is_token_valid():
-            return RedirectResponse(url="/token")
-
+            return HTMLResponse(
+                content="❌ Token not available. Send TOTP via Telegram.",
+                status_code=401
+            )
     response = await call_next(request)
     return response
 
