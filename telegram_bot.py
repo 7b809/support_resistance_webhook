@@ -1,14 +1,29 @@
-# telegram_bot.py
-
 import requests
 import threading
 import time
 import re
+import os
 from datetime import datetime
 
 from authentication import generate_access_token
 from config import is_token_valid, BOT_TOKEN, ALLOWED_CHAT_ID, load_keys
 from feed_manager import start_feed_thread
+
+from datetime import timedelta
+
+# -------------------------------------------------
+# ✅ LOG CONTROL (NEW)
+# -------------------------------------------------
+TELE_BOT_LOGS = os.getenv("TELE_BOT_LOGS", "false").strip().lower() in (
+    "true",
+    "1",
+    "yes",
+)
+
+
+def log(msg):
+    if TELE_BOT_LOGS:
+        print(f"[TELEGRAM {datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
@@ -22,10 +37,11 @@ LAST_ATTEMPT = {}  # rate limiting
 # -------------------------------------------------
 def send_message(text):
     try:
+        log(f"📤 Sending: {text}")
         requests.post(
             f"{BASE_URL}/sendMessage",
             json={"chat_id": ALLOWED_CHAT_ID, "text": text},
-            timeout=10
+            timeout=10,
         )
     except Exception as e:
         print(f"❌ Telegram send error: {e}")
@@ -51,7 +67,7 @@ def get_updates(offset=None):
 
 
 # -------------------------------------------------
-# VALIDATE TOTP (STRICT)
+# VALIDATE TOTP
 # -------------------------------------------------
 def is_valid_totp(text: str) -> bool:
     if not text:
@@ -69,14 +85,15 @@ def can_attempt(chat_id):
 
     if chat_id in LAST_ATTEMPT:
         if now - LAST_ATTEMPT[chat_id] < 5:
+            log(f"⛔ Rate limited: {chat_id}")
             return False
 
     LAST_ATTEMPT[chat_id] = now
     return True
- 
+
 
 # -------------------------------------------------
-# GET EXPIRY INFO
+# EXPIRY INFO
 # -------------------------------------------------
 def get_expiry_info():
     try:
@@ -91,9 +108,7 @@ def get_expiry_info():
         if not expiry_raw.endswith("Z"):
             expiry_raw += "Z"
 
-        expiry_time = datetime.fromisoformat(
-            expiry_raw.replace("Z", "+00:00")
-        )
+        expiry_time = datetime.fromisoformat(expiry_raw.replace("Z", "+00:00"))
 
         now = datetime.utcnow()
         remaining = expiry_time.replace(tzinfo=None) - now
@@ -113,6 +128,7 @@ def safe_start_feed():
 
     try:
         if not FEED_STARTED:
+            log("🚀 Starting feed thread...")
             start_feed_thread()
             FEED_STARTED = True
             send_message("📡 Feed started successfully")
@@ -139,22 +155,31 @@ def telegram_listener():
                     message_data = update.get("message", {})
                     chat_id = str(message_data.get("chat", {}).get("id"))
                     message = message_data.get("text", "").strip()
+
+                    log(f"📩 Received → chat_id={chat_id}, msg='{message}'")
+
                 except Exception:
                     continue
 
                 # 🔒 Security check
                 if chat_id != ALLOWED_CHAT_ID:
+                    log(f"🚫 Unauthorized chat: {chat_id}")
                     continue
 
                 # ⛔ Rate limit
-                if not can_attempt(chat_id):
-                    send_message("⏳ Please wait a few seconds before retrying")
-                    continue
+                # ✅ Skip rate limit for safe commands
+                SAFE_COMMANDS = ["/start", "/status", "/expiry"]
+
+                if message not in SAFE_COMMANDS:
+                    if not can_attempt(chat_id):
+                        send_message("⏳ Please wait a few seconds before retrying")
+                        continue
 
                 # -------------------------
                 # COMMANDS
                 # -------------------------
                 if message == "/start":
+                    log("⚙️ Command: /start")
                     send_message(
                         "👋 Welcome!\n\n"
                         "👉 Send 6-digit TOTP to login\n"
@@ -164,6 +189,7 @@ def telegram_listener():
                     continue
 
                 if message == "/status":
+                    log("⚙️ Command: /status")
                     try:
                         if is_token_valid():
                             expiry_time, remaining = get_expiry_info()
@@ -185,9 +211,10 @@ def telegram_listener():
                     continue
 
                 if message == "/expiry":
+                    log("⚙️ Command: /expiry")
                     try:
                         expiry_time, remaining = get_expiry_info()
-
+                        expiry_ist = expiry_time + timedelta(hours=5, minutes=30)
                         if not expiry_time:
                             send_message("❌ No token data available")
                             continue
@@ -201,9 +228,9 @@ def telegram_listener():
                         mins = (total_sec % 3600) // 60
 
                         send_message(
-                            f"🕒 Expiry (UTC): {expiry_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                            f"🕒 Expiry (IST): {expiry_ist.strftime('%Y-%m-%d %H:%M:%S')}\n"
                             f"⏳ Remaining: {hrs}h {mins}m"
-                        )
+                        ) 
 
                     except Exception as e:
                         print(f"❌ Expiry error: {e}")
@@ -216,6 +243,7 @@ def telegram_listener():
                 # -------------------------
                 if is_valid_totp(message):
 
+                    log(f"🔐 TOTP received: {message}")
                     send_message("⏳ Generating token...")
 
                     try:
@@ -226,23 +254,28 @@ def telegram_listener():
                         continue
 
                     if result.get("status") == "success":
+                        log("✅ Token generated successfully")
                         send_message("✅ Token generated successfully")
 
                         try:
                             if is_token_valid():
+                                log("✅ Token validated → starting feed")
                                 safe_start_feed()
                             else:
+                                log("⚠️ Token invalid after generation")
                                 send_message("⚠️ Token invalid after generation")
                         except Exception as e:
                             print(f"❌ Validation error: {e}")
                             send_message("❌ Error validating token")
 
                     else:
+                        log("❌ Token generation failed")
                         send_message(
                             f"❌ Token generation failed\n👉 {result.get('message', 'Unknown error')}"
                         )
 
                 else:
+                    log("❌ Invalid TOTP format")
                     send_message(
                         "❌ Invalid TOTP\n\n"
                         "👉 Must be exactly 6 digits (0-9)\n"

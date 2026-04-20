@@ -16,6 +16,8 @@ MONGO_URI = os.getenv("MONGO_URI")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", None)
 ALLOWED_CHAT_ID = os.getenv("CHAT_ID", None)
+PRINT_LOGS = os.getenv("PRINT_LOGS", "false").strip().lower() in ("true", "1", "yes")
+TELE_BOT_LOGS = os.getenv("TELE_BOT_LOGS", "true").strip().lower() in ("true", "1", "yes")
 
 # ✅ ENV आधारित DB + COLLECTION
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "trading")
@@ -108,7 +110,8 @@ def is_token_valid():
     data = load_keys()
 
     # 🔍 DEBUG (keep this for now)
-    print("🔍 Loaded token data:", data)
+    if PRINT_LOGS:
+        print("🔍 Loaded token data:", data)
 
     if not data:
         print("❌ keys_data.json / MongoDB missing or corrupted")
