@@ -2,7 +2,7 @@ import os
 import json
 import requests
 from dotenv import load_dotenv
-
+from config import MONGO_DB_NAME, MONGO_COLLECTION_NAME
 # ✅ Mongo (safe import)
 try:
     from pymongo import MongoClient
@@ -38,8 +38,8 @@ def save_keys(data: dict):
     if MONGO_URI and MongoClient:
         try:
             client = MongoClient(MONGO_URI)
-            db = client["trading"]
-            collection = db["auth"]
+            db = client[MONGO_DB_NAME]
+            collection = db[MONGO_COLLECTION_NAME]
 
             collection.update_one(
                 {"_id": "dhan_token"},
@@ -69,8 +69,8 @@ def delete_keys():
     if MONGO_URI and MongoClient:
         try:
             client = MongoClient(MONGO_URI)
-            db = client["trading"]
-            collection = db["auth"]
+            db = client[MONGO_DB_NAME]
+            collection = db[MONGO_COLLECTION_NAME]
 
             collection.delete_one({"_id": "dhan_token"})
             print("🗑️ Token removed from MongoDB")
