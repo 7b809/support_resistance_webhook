@@ -33,6 +33,41 @@ LAST_ATTEMPT = {}  # rate limiting
 
 
 # -------------------------------------------------
+# 💰 GET FUND LIMIT (BALANCE)  ✅ ADDED
+# -------------------------------------------------
+def get_fund_limit():
+    try:
+        data = load_keys()
+        if not data:
+            return None
+
+        access_token = data.get("accessToken")
+        if not access_token:
+            return None
+
+        headers = {
+            "Content-Type": "application/json",
+            "access-token": access_token,
+        }
+
+        response = requests.get(
+            "https://api.dhan.co/v2/fundlimit",
+            headers=headers,
+            timeout=10,
+        )
+
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"❌ Fund API error: {response.text}")
+            return None
+
+    except Exception as e:
+        print(f"❌ Fund fetch error: {e}")
+        return None
+
+
+# -------------------------------------------------
 # SEND MESSAGE (SAFE)
 # -------------------------------------------------
 def send_message(text):
@@ -167,8 +202,7 @@ def telegram_listener():
                     continue
 
                 # ⛔ Rate limit
-                # ✅ Skip rate limit for safe commands
-                SAFE_COMMANDS = ["/start", "/status", "/expiry"]
+                SAFE_COMMANDS = ["/start", "/status", "/expiry", "/balance"]
 
                 if message not in SAFE_COMMANDS:
                     if not can_attempt(chat_id):
@@ -184,7 +218,8 @@ def telegram_listener():
                         "👋 Welcome!\n\n"
                         "👉 Send 6-digit TOTP to login\n"
                         "👉 /status → Check token\n"
-                        "👉 /expiry → Check expiry"
+                        "👉 /expiry → Check expiry\n"
+                        "👉 /balance → Check funds"
                     )
                     continue
 
@@ -215,6 +250,7 @@ def telegram_listener():
                     try:
                         expiry_time, remaining = get_expiry_info()
                         expiry_ist = expiry_time + timedelta(hours=5, minutes=30)
+
                         if not expiry_time:
                             send_message("❌ No token data available")
                             continue
@@ -230,11 +266,44 @@ def telegram_listener():
                         send_message(
                             f"🕒 Expiry (IST): {expiry_ist.strftime('%Y-%m-%d %H:%M:%S')}\n"
                             f"⏳ Remaining: {hrs}h {mins}m"
-                        ) 
+                        )
 
                     except Exception as e:
                         print(f"❌ Expiry error: {e}")
                         send_message("❌ Failed to fetch expiry info")
+
+                    continue
+
+                # -------------------------
+                # 💰 BALANCE COMMAND (NEW)
+                # -------------------------
+                if message == "/balance":
+                    log("⚙️ Command: /balance")
+
+                    try:
+                        if not is_token_valid():
+                            send_message("❌ Token not valid. Please login again.")
+                            continue
+
+                        fund = get_fund_limit()
+
+                        if not fund:
+                            send_message("❌ Failed to fetch balance")
+                            continue
+
+                        msg = (
+                            "💰 Account Balance Info\n\n"
+                            f"Available Balance: ₹{fund.get('availabelBalance')}\n"
+                            f"Withdrawable: ₹{fund.get('withdrawableBalance')}\n"
+                            f"Used: ₹{fund.get('utilizedAmount')}\n"
+                            f"Collateral: ₹{fund.get('collateralAmount')}\n"
+                        )
+
+                        send_message(msg)
+
+                    except Exception as e:
+                        print(f"❌ Balance error: {e}")
+                        send_message("❌ Error fetching balance")
 
                     continue
 
@@ -256,6 +325,20 @@ def telegram_listener():
                     if result.get("status") == "success":
                         log("✅ Token generated successfully")
                         send_message("✅ Token generated successfully")
+
+                        # 💰 AUTO BALANCE AFTER LOGIN (NEW)
+                        try:
+                            fund = get_fund_limit()
+                            if fund:
+                                send_message(
+                                    "💰 Token Valid ✅\n\n"
+                                    f"Available Balance: ₹{fund.get('availabelBalance')}\n"
+                                    f"Withdrawable: ₹{fund.get('withdrawableBalance')}"
+                                )
+                            else:
+                                send_message("⚠️ Balance fetch failed")
+                        except Exception as e:
+                            print(f"❌ Post-login balance error: {e}")
 
                         try:
                             if is_token_valid():
