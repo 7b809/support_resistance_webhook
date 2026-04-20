@@ -1,5 +1,3 @@
-# telegram_bot.py
-
 import requests
 import threading
 import time
@@ -10,6 +8,13 @@ from authentication import generate_access_token
 from config import is_token_valid, BOT_TOKEN, ALLOWED_CHAT_ID, load_keys
 from feed_manager import start_feed_thread
 
+# ✅ NEW IMPORT (ADDED ONLY)
+from dhan_portfolio import (
+    get_fund_limit,
+    get_holdings,
+    get_positions,
+    exit_all_positions
+)
 
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
@@ -73,7 +78,7 @@ def can_attempt(chat_id):
 
     LAST_ATTEMPT[chat_id] = now
     return True
- 
+
 
 # -------------------------------------------------
 # GET EXPIRY INFO
@@ -159,7 +164,12 @@ def telegram_listener():
                         "👋 Welcome!\n\n"
                         "👉 Send 6-digit TOTP to login\n"
                         "👉 /status → Check token\n"
-                        "👉 /expiry → Check expiry"
+                        "👉 /expiry → Check expiry\n\n"
+                        "📊 Portfolio Commands:\n"
+                        "/balance → Account balance\n"
+                        "/holdings → Holdings\n"
+                        "/positions → Positions\n"
+                        "/exitall → Exit all positions ⚠️"
                     )
                     continue
 
@@ -209,6 +219,27 @@ def telegram_listener():
                         print(f"❌ Expiry error: {e}")
                         send_message("❌ Failed to fetch expiry info")
 
+                    continue
+
+                # ✅ NEW COMMANDS (ADDED ONLY)
+                if message == "/balance":
+                    res = get_fund_limit()
+                    send_message(res.get("data") or res.get("message"))
+                    continue
+
+                if message == "/holdings":
+                    res = get_holdings()
+                    send_message(res.get("data") or res.get("message"))
+                    continue
+
+                if message == "/positions":
+                    res = get_positions()
+                    send_message(res.get("data") or res.get("message"))
+                    continue
+
+                if message == "/exitall":
+                    res = exit_all_positions()
+                    send_message(res.get("data") or res.get("message"))
                     continue
 
                 # -------------------------
