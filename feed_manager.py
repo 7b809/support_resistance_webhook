@@ -12,9 +12,11 @@ from config import load_keys  # ✅ NEW
 TEST_LOG = False
 RECONNECT_DELAY = 3
 
+
 def log(msg):
     if TEST_LOG:
         print(f"[FEED {datetime.now().strftime('%H:%M:%S')}] {msg}")
+
 
 load_dotenv()
 
@@ -34,13 +36,27 @@ def get_credentials():
 
 
 ALLOWED_SECURITIES = {
-    "13": [(marketfeed.IDX, "13", marketfeed.Ticker), (marketfeed.IDX, "13", marketfeed.Quote)],
-    "21": [(marketfeed.IDX, "21", marketfeed.Ticker), (marketfeed.IDX, "21", marketfeed.Quote)],
-    "51": [(marketfeed.IDX, "51", marketfeed.Ticker), (marketfeed.IDX, "51", marketfeed.Quote)],
-    "5024": [(marketfeed.IDX, "5024", marketfeed.Ticker), (marketfeed.IDX, "5024", marketfeed.Quote)],
+    "13": [
+        (marketfeed.IDX, "13", marketfeed.Ticker),
+        (marketfeed.IDX, "13", marketfeed.Quote),
+    ],
+    "21": [
+        (marketfeed.IDX, "21", marketfeed.Ticker),
+        (marketfeed.IDX, "21", marketfeed.Quote),
+    ],
+    "51": [
+        (marketfeed.IDX, "51", marketfeed.Ticker),
+        (marketfeed.IDX, "51", marketfeed.Quote),
+    ],
+    "5024": [
+        (marketfeed.NSE_CURR, "5024", marketfeed.Ticker),
+        (marketfeed.NSE_CURR, "5024", marketfeed.Quote),
+    ],
 }
 
-SUBSCRIBERS = { (sid, mode): set() for sid in ALLOWED_SECURITIES for mode in ("ticker", "quote") }
+SUBSCRIBERS = {
+    (sid, mode): set() for sid in ALLOWED_SECURITIES for mode in ("ticker", "quote")
+}
 
 
 def build_instruments():
@@ -68,10 +84,7 @@ class FeedManager:
                 asyncio.set_event_loop(loop)
 
                 feed = marketfeed.DhanFeed(
-                    CLIENT_ID,
-                    ACCESS_TOKEN,
-                    build_instruments(),
-                    version="v2"
+                    CLIENT_ID, ACCESS_TOKEN, build_instruments(), version="v2"
                 )
 
                 feed.run_forever()
