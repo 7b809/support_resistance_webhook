@@ -73,7 +73,7 @@ def can_attempt(chat_id):
 
     LAST_ATTEMPT[chat_id] = now
     return True
-
+ 
 
 # -------------------------------------------------
 # GET EXPIRY INFO
