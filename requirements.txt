@@ -3,6 +3,6 @@ uvicorn
 dhanhq==2.0.2
 python-dotenv
 jinja2
-websockets==10.4
+websockets
 python-multipart
 pymongo 
