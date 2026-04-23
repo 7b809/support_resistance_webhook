@@ -45,13 +45,47 @@ async def lifespan(app: FastAPI):
         if is_token_valid():
             log("Token valid → starting feed")
             start_feed_thread()
+
+            # ✅ NEW: wait & log instruments
+            if APP_LOGS:
+                async def log_instruments():
+                    await asyncio.sleep(2)  # wait for feed init
+
+                    try:
+                        data = get_current_instruments()
+
+                        if data.get("status") == "success":
+                            instruments = data.get("instruments", [])
+
+                            count = len(instruments)
+
+                            log(f"Active Instruments Loaded → {count}")
+
+                            if count <= 10:
+                                # ✅ full detail
+                                for ex, sid, typ in instruments:
+                                    log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
+                            else:
+                                # ✅ only security ids
+                                security_ids = list({sid for _, sid, _ in instruments})
+                                log(f"Security IDs → {security_ids}")
+
+
+                        else:
+                            log(f"Instrument fetch failed: {data}", "WARN")
+
+                    except Exception as e:
+                        log(f"Startup instrument log error: {e}", "ERROR")
+
+                asyncio.create_task(log_instruments())
+
         else:
             log("Waiting for TOTP from Telegram...", "WARN")
+
     except Exception as e:
         log(f"Feed start error: {e}", "ERROR")
 
     yield
-
 
 app = FastAPI(
     title="Dhan Market Dashboard",
@@ -173,7 +207,10 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
             await ws.close(code=1008)
             return
 
-        if security_id not in ALLOWED_SECURITIES or mode not in ("ticker", "quote"):
+        if (
+            (security_id not in ALLOWED_SECURITIES and (security_id, mode) not in SUBSCRIBERS)
+            or mode not in ("ticker", "quote")
+        ):            
             log(f"Invalid WS request → {security_id} {mode}", "WARN")
             await ws.close(code=1008)
             return

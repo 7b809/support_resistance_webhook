@@ -61,10 +61,7 @@ ALLOWED_SECURITIES = {
         (marketfeed.IDX, "51", marketfeed.Ticker),
         (marketfeed.IDX, "51", marketfeed.Quote),
     ],
-    "5024": [
-        (marketfeed.NSE_CURR, "5024", marketfeed.Ticker),
-        (marketfeed.NSE_CURR, "5024", marketfeed.Quote),
-    ],
+   
 }
 
 
@@ -169,6 +166,27 @@ def add_instruments(symbols):
     try:
         LIVE_FEED.subscribe_symbols(symbols)
 
+
+        # -------------------------------------------------
+        # LOG UPDATED INSTRUMENTS
+        # -------------------------------------------------
+        try:
+            instruments = LIVE_FEED.instruments
+            count = len(instruments)
+
+            log(f"Updated Instruments Count → {count}")
+
+            if count <= 10:
+                for ex, sid, typ in instruments:
+                    log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
+            else:
+                security_ids = sorted({sid for _, sid, _ in instruments})
+                log(f"Security IDs → {security_ids}")
+
+        except Exception as log_err:
+            log(f"Post-subscribe log error: {log_err}", "ERROR")
+
+
         # ✅ Ensure subscribers exist
         for ex, sec_id, typ in symbols:
             sid = str(sec_id)
@@ -203,6 +221,26 @@ def remove_instruments(symbols):
 
     try:
         LIVE_FEED.unsubscribe_symbols(symbols)
+
+        # -------------------------------------------------
+        # LOG UPDATED INSTRUMENTS (NEW)
+        # -------------------------------------------------
+        try:
+            instruments = LIVE_FEED.instruments
+            count = len(instruments)
+
+            log(f"Updated Instruments Count → {count}")
+
+            if count <= 10:
+                for ex, sid, typ in instruments:
+                    log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
+            else:
+                security_ids = sorted({sid for _, sid, _ in instruments})
+                log(f"Security IDs → {security_ids}")
+
+        except Exception as log_err:
+            log(f"Post-unsubscribe log error: {log_err}", "ERROR")
+            
 
         # ✅ Clean subscribers
         for ex, sec_id, typ in symbols:
