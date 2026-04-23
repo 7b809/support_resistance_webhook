@@ -4,6 +4,7 @@ from fastapi.templating import Jinja2Templates
 from contextlib import asynccontextmanager
 import asyncio, os
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
@@ -91,6 +92,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Dhan Market Dashboard",
     lifespan=lifespan,
+)
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # or restrict later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
