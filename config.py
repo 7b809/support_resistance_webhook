@@ -36,18 +36,26 @@ REQUIRED_KEYS = [
 mongo_client = None
 mongo_collection = None
 
+# -------------------------------------------------
+# INSTRUMENT COLLECTION (NEW)
+# -------------------------------------------------
+mongo_instrument_collection = None
+
 if MONGO_URI and MongoClient:
     try:
-        mongo_client = MongoClient(MONGO_URI)
-
         db = mongo_client[MONGO_DB_NAME]
-        mongo_collection = db[MONGO_COLLECTION_NAME]
 
-        print(f"✅ MongoDB connected → DB: {MONGO_DB_NAME}, Collection: {MONGO_COLLECTION_NAME}")
+        INSTRUMENT_COLLECTION_NAME = os.getenv(
+            "MONGO_INSTRUMENT_COLLECTION",
+            "instrument_subscriptions"
+        )
+
+        mongo_instrument_collection = db[INSTRUMENT_COLLECTION_NAME]
+
+        print(f"✅ Instrument Collection → {INSTRUMENT_COLLECTION_NAME}")
 
     except Exception as e:
-        print(f"❌ MongoDB init error: {e}")
-
+        print(f"❌ Instrument collection init error: {e}")
 
 # -------------------------------------------------
 # LOAD KEYS (Mongo → File fallback)  ✅ FIXED ORDER
@@ -144,3 +152,71 @@ def is_token_valid():
         return False
 
     return True
+
+
+def save_instruments(symbols):
+    if mongo_instrument_collection is None:
+        return
+
+    try:
+        for sym in symbols:
+            ex, sid, typ = sym
+
+            mongo_instrument_collection.update_one(
+                {
+                    "security_id": str(sid),
+                    "exchange": ex,
+                    "type": typ,
+                },
+                {
+                    "$set": {
+                        "security_id": str(sid),
+                        "exchange": ex,
+                        "type": typ,
+                        "updated_at": datetime.utcnow(),
+                    }
+                },
+                upsert=True
+            )
+
+    except Exception as e:
+        print(f"❌ Save instruments error: {e}")
+
+def remove_instruments_db(symbols):
+    if mongo_instrument_collection is None:
+        return
+
+    try:
+        for sym in symbols:
+            ex, sid, typ = sym
+
+            mongo_instrument_collection.delete_one(
+                {
+                    "security_id": str(sid),
+                    "exchange": ex,
+                    "type": typ,
+                }
+            )
+
+    except Exception as e:
+        print(f"❌ Remove instruments DB error: {e}")
+           
+def load_instruments():
+    if mongo_instrument_collection is None:
+        return []
+
+    try:
+        data = mongo_instrument_collection.find()
+
+        result = []
+        for doc in data:
+            result.append(
+                (doc["exchange"], doc["security_id"], doc["type"])
+            )
+
+        return result
+
+    except Exception as e:
+        print(f"❌ Load instruments error: {e}")
+        return []
+    

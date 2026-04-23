@@ -6,9 +6,7 @@ from dotenv import load_dotenv
 from dhanhq import marketfeed
 from datetime import datetime
 from websockets.exceptions import ConnectionClosedError
-
-from config import load_keys  # ✅ EXISTING
-
+from config import load_instruments, save_instruments, remove_instruments_db,load_keys
 RECONNECT_DELAY = 3
 # -------------------------------------------------
 # ENV CONFIG
@@ -104,10 +102,33 @@ class FeedManager:
 
                 global LIVE_FEED
 
+                # -------------------------------------------------
+                # LOAD FROM DB + STATIC
+                # -------------------------------------------------
+                initial_instruments = build_instruments()
+                db_instruments = load_instruments()
+
+                # merge + remove duplicates
+                combined = list(set(initial_instruments + db_instruments))
+
+                log(f"Loaded from DB → {len(db_instruments)} instruments")
+
+                # -------------------------------------------------
+                # 🔥 INIT SUBSCRIBERS FOR DB INSTRUMENTS
+                # -------------------------------------------------
+                for ex, sid, typ in db_instruments:
+                    sid = str(sid)
+
+                    if (sid, "ticker") not in SUBSCRIBERS:
+                        SUBSCRIBERS[(sid, "ticker")] = set()
+
+                    if (sid, "quote") not in SUBSCRIBERS:
+                        SUBSCRIBERS[(sid, "quote")] = set()
+
                 feed = marketfeed.DhanFeed(
                     CLIENT_ID,
                     ACCESS_TOKEN,
-                    build_instruments(),
+                    combined,
                     version="v2",
                 )
 
@@ -146,12 +167,16 @@ class FeedManager:
                         time.sleep(1)
 
             except ConnectionClosedError:
-                log("Feed disconnected, reconnecting...", "WARN")
+                log("Feed disconnected, restarting feed...", "WARN")
                 time.sleep(RECONNECT_DELAY)
-
+                continue  # 🔥 THIS IS IMPORTANT
+            
             except Exception as e:
                 log(f"Feed error: {e}", "ERROR")
+
+                # 🔥 Treat as reconnect case
                 time.sleep(RECONNECT_DELAY)
+                continue
 
 
 # -------------------------------------------------
@@ -164,7 +189,22 @@ def add_instruments(symbols):
         return {"status": "error", "message": "Feed not started"}
 
     try:
+        # -------------------------------------------------
+        # REMOVE DUPLICATES + FILTER EXISTING
+        # -------------------------------------------------
+        symbols = list(set(symbols))
+
+        existing = set(LIVE_FEED.instruments)
+        symbols = list(set(symbols) - existing)
+
+        if not symbols:
+            return {
+                "status": "success",
+                "message": "No new instruments to subscribe"
+            }
+
         LIVE_FEED.subscribe_symbols(symbols)
+        save_instruments(symbols)
 
 
         # -------------------------------------------------
@@ -177,7 +217,7 @@ def add_instruments(symbols):
             log(f"Updated Instruments Count → {count}")
 
             if count <= 10:
-                for ex, sid, typ in instruments:
+                for ex, sid, typ in sorted(instruments):
                     log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
             else:
                 security_ids = sorted({sid for _, sid, _ in instruments})
@@ -220,7 +260,10 @@ def remove_instruments(symbols):
         return {"status": "error", "message": "Feed not started"}
 
     try:
+
         LIVE_FEED.unsubscribe_symbols(symbols)
+        
+        remove_instruments_db(symbols)
 
         # -------------------------------------------------
         # LOG UPDATED INSTRUMENTS (NEW)
@@ -232,7 +275,7 @@ def remove_instruments(symbols):
             log(f"Updated Instruments Count → {count}")
 
             if count <= 10:
-                for ex, sid, typ in instruments:
+                for ex, sid, typ in sorted(instruments):
                     log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
             else:
                 security_ids = sorted({sid for _, sid, _ in instruments})
