@@ -5,4 +5,4 @@ python-dotenv
 jinja2
 websockets==10.4
 python-multipart
-pymongo
+pymongo 
