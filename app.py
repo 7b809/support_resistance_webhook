@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 import asyncio, os
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
@@ -319,3 +320,9 @@ def subscriptions():
     except Exception as e:
         log(f"Subscriptions API error: {e}", "ERROR")
         return {"status": "error", "message": str(e)}
+    
+
+
+@app.get("/ui", response_class=HTMLResponse)
+def ui(request: Request):
+    return templates.TemplateResponse("dashboard.html", {"request": request})    
