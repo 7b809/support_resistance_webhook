@@ -225,7 +225,7 @@ def add_instruments(symbols):
 
         except Exception as log_err:
             log(f"Post-subscribe log error: {log_err}", "ERROR")
-
+ 
 
         # ✅ Ensure subscribers exist
         for ex, sec_id, typ in symbols:
