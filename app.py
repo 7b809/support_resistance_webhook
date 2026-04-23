@@ -13,7 +13,8 @@ from feed_manager import (
     ALLOWED_SECURITIES,
     SUBSCRIBERS,
     start_feed_thread,
-    get_current_instruments
+    get_current_instruments,
+    
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -50,34 +51,32 @@ async def lifespan(app: FastAPI):
 
             # ✅ NEW: wait & log instruments
             if APP_LOGS:
+
                 async def log_instruments():
-                    await asyncio.sleep(2)  # wait for feed init
+                    await asyncio.sleep(3)  # 🔥 increase wait (important)
 
                     try:
                         data = get_current_instruments()
 
-                        if data.get("status") == "success":
-                            instruments = data.get("instruments", [])
+                        if data.get("status") != "success":
+                            log("Feed not ready yet (skip logging)", "WARN")
+                            return
 
-                            count = len(instruments)
+                        instruments = data.get("instruments", [])
+                        count = len(instruments)
 
-                            log(f"Active Instruments Loaded → {count}")
+                        log(f"Active Instruments Loaded → {count}")
 
-                            if count <= 10:
-                                # ✅ full detail
-                                for ex, sid, typ in instruments:
-                                    log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
-                            else:
-                                # ✅ only security ids
-                                security_ids = list({sid for _, sid, _ in instruments})
-                                log(f"Security IDs → {security_ids}")
-
-
+                        if count <= 10:
+                            for ex, sid, typ in instruments:
+                                log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
                         else:
-                            log(f"Instrument fetch failed: {data}", "WARN")
+                            security_ids = sorted({sid for _, sid, _ in instruments})
+                            log(f"Security IDs → {security_ids}")
 
                     except Exception as e:
                         log(f"Startup instrument log error: {e}", "ERROR")
+
 
                 asyncio.create_task(log_instruments())
 
@@ -209,10 +208,18 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
             await ws.close(code=1008)
             return
 
-        if (
-            (security_id not in ALLOWED_SECURITIES and (security_id, mode) not in SUBSCRIBERS)
-            or mode not in ("ticker", "quote")
-        ):            
+        valid_modes = ("ticker", "quote")
+
+        if mode not in valid_modes:
+            log(f"Invalid WS mode → {mode}", "WARN")
+            await ws.close(code=1008)
+            return
+
+        # allow dynamic instruments also
+        if (security_id, mode) not in SUBSCRIBERS:
+            log(f"WS requested for non-subscribed instrument → {security_id}", "WARN")
+            
+
             log(f"Invalid WS request → {security_id} {mode}", "WARN")
             await ws.close(code=1008)
             return
