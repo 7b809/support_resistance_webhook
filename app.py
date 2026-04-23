@@ -28,7 +28,7 @@ TEST_MODE = os.getenv("TEST_MODE", "false").strip().lower() in ("true", "1", "ye
 def log(msg, level="INFO"):
     if APP_LOGS:
         print(f"[APP {level} {datetime.now().strftime('%H:%M:%S')}] {msg}")
-
+ 
 
 # -------------------------------------------------
 # LIFESPAN
