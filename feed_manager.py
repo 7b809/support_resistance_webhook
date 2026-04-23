@@ -129,7 +129,7 @@ class FeedManager:
                     CLIENT_ID,
                     ACCESS_TOKEN,
                     combined,
-                    version="v2",
+                    # version="v2",
                 )
 
                 LIVE_FEED = feed  # ⭐ store globally
