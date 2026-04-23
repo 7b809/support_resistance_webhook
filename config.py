@@ -11,17 +11,25 @@ except:
 
 load_dotenv()
 
+# -------------------------------------------------
+# ENV CONFIG
+# -------------------------------------------------
 KEYS_FILE = "keys_data.json"
 MONGO_URI = os.getenv("MONGO_URI")
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", None)
 ALLOWED_CHAT_ID = os.getenv("CHAT_ID", None)
+
 PRINT_LOGS = os.getenv("PRINT_LOGS", "false").strip().lower() in ("true", "1", "yes")
 TELE_BOT_LOGS = os.getenv("TELE_BOT_LOGS", "true").strip().lower() in ("true", "1", "yes")
 
-# ✅ ENV आधारित DB + COLLECTION
 MONGO_DB_NAME = os.getenv("MONGO_DB_NAME", "trading")
 MONGO_COLLECTION_NAME = os.getenv("MONGO_COLLECTION_NAME", "auth")
+
+INSTRUMENT_COLLECTION_NAME = os.getenv(
+    "MONGO_INSTRUMENT_COLLECTION",
+    "instrument_subscriptions"
+)
 
 REQUIRED_KEYS = [
     "dhanClientId",
@@ -30,58 +38,74 @@ REQUIRED_KEYS = [
     "expiryTime",
 ]
 
+
 # -------------------------------------------------
-# ✅ SINGLE Mongo INIT (FIXED)
+# LOG HELPER
+# -------------------------------------------------
+def log(msg, level="INFO"):
+    if PRINT_LOGS:
+        print(f"[CONFIG {level}] {msg}")
+
+
+# -------------------------------------------------
+# MONGO INIT
 # -------------------------------------------------
 mongo_client = None
 mongo_collection = None
-
-# -------------------------------------------------
-# INSTRUMENT COLLECTION (NEW)
-# -------------------------------------------------
 mongo_instrument_collection = None
 
 if MONGO_URI and MongoClient:
     try:
+        mongo_client = MongoClient(MONGO_URI)
+
         db = mongo_client[MONGO_DB_NAME]
 
-        INSTRUMENT_COLLECTION_NAME = os.getenv(
-            "MONGO_INSTRUMENT_COLLECTION",
-            "instrument_subscriptions"
-        )
+        # ✅ Token collection
+        mongo_collection = db[MONGO_COLLECTION_NAME]
 
+        # ✅ Instrument collection
         mongo_instrument_collection = db[INSTRUMENT_COLLECTION_NAME]
 
-        print(f"✅ Instrument Collection → {INSTRUMENT_COLLECTION_NAME}")
+        log(f"MongoDB connected → DB:{MONGO_DB_NAME}", "INFO")
+        log(f"Token Collection → {MONGO_COLLECTION_NAME}", "INFO")
+        log(f"Instrument Collection → {INSTRUMENT_COLLECTION_NAME}", "INFO")
+
+        # ✅ Ensure unique index (VERY IMPORTANT)
+        try:
+            mongo_instrument_collection.create_index(
+                [("security_id", 1), ("exchange", 1), ("type", 1)],
+                unique=True
+            )
+            log("Instrument index ensured", "INFO")
+        except Exception as idx_err:
+            log(f"Index creation warning: {idx_err}", "WARN")
 
     except Exception as e:
-        print(f"❌ Instrument collection init error: {e}")
+        log(f"MongoDB init error: {e}", "ERROR")
+
+else:
+    log("MongoDB not configured (MONGO_URI missing)", "WARN")
+
 
 # -------------------------------------------------
-# LOAD KEYS (Mongo → File fallback)  ✅ FIXED ORDER
+# LOAD KEYS (Mongo → File fallback)
 # -------------------------------------------------
 def load_keys():
-
-    # ✅ 1. Try MongoDB FIRST (important for Railway)
     if mongo_collection is not None:
         try:
             data = mongo_collection.find_one({"_id": "dhan_token"})
-
             if data:
                 data.pop("_id", None)
                 return data
-
         except Exception as e:
-            print(f"❌ MongoDB load error: {e}")
+            log(f"Mongo load error: {e}", "ERROR")
 
-    # ✅ 2. Fallback to local file
     if os.path.exists(KEYS_FILE):
         try:
             with open(KEYS_FILE, "r") as f:
-                data = json.load(f)
-                return data
+                return json.load(f)
         except Exception:
-            print("❌ Error reading keys_data.json")
+            log("Error reading keys_data.json", "ERROR")
 
     return None
 
@@ -90,15 +114,12 @@ def load_keys():
 # SAVE KEYS (FILE + MONGO)
 # -------------------------------------------------
 def save_keys(data):
-
-    # ✅ Save locally (optional for local dev)
     try:
         with open(KEYS_FILE, "w") as f:
             json.dump(data, f, indent=4)
     except Exception as e:
-        print(f"❌ Failed to save file: {e}")
+        log(f"File save error: {e}", "ERROR")
 
-    # ✅ Save to MongoDB
     if mongo_collection is not None:
         try:
             mongo_collection.update_one(
@@ -106,9 +127,9 @@ def save_keys(data):
                 {"$set": data},
                 upsert=True
             )
-            print("✅ Token saved to MongoDB")
+            log("Token saved to MongoDB", "INFO")
         except Exception as e:
-            print(f"❌ MongoDB save error: {e}")
+            log(f"Mongo save error: {e}", "ERROR")
 
 
 # -------------------------------------------------
@@ -117,51 +138,46 @@ def save_keys(data):
 def is_token_valid():
     data = load_keys()
 
-    # # 🔍 DEBUG (keep this for now)
-    # if PRINT_LOGS:
-    #     print("🔍 Loaded token data:", data)
-
     if not data:
-        print("❌ keys_data.json / MongoDB missing or corrupted")
+        log("Token missing or corrupted", "WARN")
         return False
 
-    # ✅ Check required keys
     for key in REQUIRED_KEYS:
         if key not in data or not data[key]:
-            print(f"❌ Missing or empty key: {key}")
+            log(f"Missing key: {key}", "ERROR")
             return False
 
-    # ✅ Fix timezone issue
     try:
         expiry_raw = data["expiryTime"]
 
         if not expiry_raw.endswith("Z"):
-            expiry_raw = expiry_raw + "Z"
+            expiry_raw += "Z"
 
         expiry_time = datetime.fromisoformat(
             expiry_raw.replace("Z", "+00:00")
         )
 
     except Exception:
-        print("❌ Invalid expiry format")
+        log("Invalid expiry format", "ERROR")
         return False
 
-    # ✅ Compare with UTC
     if datetime.utcnow() >= expiry_time.replace(tzinfo=None):
-        print("❌ Token expired")
+        log("Token expired", "WARN")
         return False
 
     return True
 
 
+# -------------------------------------------------
+# SAVE INSTRUMENTS
+# -------------------------------------------------
 def save_instruments(symbols):
     if mongo_instrument_collection is None:
+        log("Instrument collection not available", "WARN")
         return
 
     try:
-        for sym in symbols:
-            ex, sid, typ = sym
-
+        for ex, sid, typ in symbols:
             mongo_instrument_collection.update_one(
                 {
                     "security_id": str(sid),
@@ -179,17 +195,22 @@ def save_instruments(symbols):
                 upsert=True
             )
 
-    except Exception as e:
-        print(f"❌ Save instruments error: {e}")
+        log(f"Saved instruments → {len(symbols)}", "INFO")
 
+    except Exception as e:
+        log(f"Save instruments error: {e}", "ERROR")
+
+
+# -------------------------------------------------
+# REMOVE INSTRUMENTS
+# -------------------------------------------------
 def remove_instruments_db(symbols):
     if mongo_instrument_collection is None:
+        log("Instrument collection not available", "WARN")
         return
 
     try:
-        for sym in symbols:
-            ex, sid, typ = sym
-
+        for ex, sid, typ in symbols:
             mongo_instrument_collection.delete_one(
                 {
                     "security_id": str(sid),
@@ -198,25 +219,31 @@ def remove_instruments_db(symbols):
                 }
             )
 
+        log(f"Removed instruments → {len(symbols)}", "INFO")
+
     except Exception as e:
-        print(f"❌ Remove instruments DB error: {e}")
-           
+        log(f"Remove instruments DB error: {e}", "ERROR")
+
+
+# -------------------------------------------------
+# LOAD INSTRUMENTS
+# -------------------------------------------------
 def load_instruments():
     if mongo_instrument_collection is None:
+        log("Instrument collection not available", "WARN")
         return []
 
     try:
         data = mongo_instrument_collection.find()
 
-        result = []
-        for doc in data:
-            result.append(
-                (doc["exchange"], doc["security_id"], doc["type"])
-            )
+        result = [
+            (doc["exchange"], doc["security_id"], doc["type"])
+            for doc in data
+        ]
 
+        log(f"Loaded instruments → {len(result)}", "INFO")
         return result
 
     except Exception as e:
-        print(f"❌ Load instruments error: {e}")
+        log(f"Load instruments error: {e}", "ERROR")
         return []
-    
