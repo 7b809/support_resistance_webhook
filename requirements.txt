@@ -1,6 +1,6 @@
 fastapi
 uvicorn
-dhanhq==2.0.2
+dhanhq
 python-dotenv
 jinja2
 websockets==10.4
