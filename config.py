@@ -109,9 +109,9 @@ def save_keys(data):
 def is_token_valid():
     data = load_keys()
 
-    # 🔍 DEBUG (keep this for now)
-    if PRINT_LOGS:
-        print("🔍 Loaded token data:", data)
+    # # 🔍 DEBUG (keep this for now)
+    # if PRINT_LOGS:
+    #     print("🔍 Loaded token data:", data)
 
     if not data:
         print("❌ keys_data.json / MongoDB missing or corrupted")
