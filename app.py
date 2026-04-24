@@ -20,7 +20,21 @@ from feed_manager import (
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-templates = Jinja2Templates(directory="templates")
+
+from jinja2 import Environment, FileSystemLoader
+from starlette.templating import Jinja2Templates
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+jinja_env = Environment(
+    loader=FileSystemLoader(os.path.join(BASE_DIR, "templates")),
+    autoescape=True,
+)
+
+templates = Jinja2Templates(env=jinja_env)
+
+templates.env.cache = {}   # 🔥 disable cache (fix)
 
 
 # -------------------------------------------------
@@ -105,29 +119,31 @@ app.add_middleware(
 )
 
 
-# -------------------------------------------------
-# MIDDLEWARE
-# -------------------------------------------------
-@app.middleware("http")
-async def check_token_middleware(request: Request, call_next):
-    try:
-        public_paths = ["/", "/token", "/generate-token", "/favicon.ico"]
+# # -------------------------------------------------
+# # MIDDLEWARE
+# # -------------------------------------------------
+# @app.middleware("http")
+# async def check_token_middleware(request: Request, call_next):
+#     try:
+#         public_paths = {"/", "/token", "/generate-token", "/favicon.ico", "/ui"}
 
-        if request.url.path not in public_paths:
-            if not is_token_valid():
-                log("Blocked request → token invalid", "WARN")
-                return HTMLResponse(
-                    content="❌ Token not available. Send TOTP via Telegram.",
-                    status_code=401
-                )
+#         path = str(request.url.path)  # 🔥 FORCE STRING (fix)
 
-        response = await call_next(request)
-        return response
+#         if path not in public_paths:
+#             if not is_token_valid():
+#                 log("Blocked request → token invalid", "WARN")
+#                 return HTMLResponse(
+#                     content="❌ Token not available. Send TOTP via Telegram.",
+#                     status_code=401
+#                 )
 
-    except Exception as e:
-        log(f"Middleware error: {e}", "ERROR")
-        return HTMLResponse(content="❌ Internal Server Error", status_code=500)
+#         response = await call_next(request)
+#         return response
 
+#     except Exception as e:
+#         log(f"Middleware error: {e}", "ERROR")
+#         return HTMLResponse(content="❌ Internal Server Error", status_code=500)
+    
 
 # -------------------------------------------------
 # TOKEN PAGE
@@ -323,6 +339,6 @@ def subscriptions():
     
 
 
-@app.get("/ui", response_class=HTMLResponse)
-def ui(request: Request):
-    return templates.TemplateResponse("dashboard.html", {"request": request})    
+# @app.get("/ui", response_class=HTMLResponse)
+# def ui(request: Request):
+#     return templates.TemplateResponse("dashboard.html", {"request": request})    

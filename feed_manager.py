@@ -1,12 +1,22 @@
-# ✅ STEP 1: ADD THIS FIRST (TOP OF FILE)
-
 import websockets
 
-# 🔥 FIX dhanhq compatibility (MUST RUN BEFORE DhanFeed is used)
-if not hasattr(websockets.client.ClientConnection, "closed"):
-    websockets.client.ClientConnection.closed = property(
-        lambda self: self.close_code is not None
-    )
+# 🔥 PATCH for dhanhq compatibility
+try:
+    from websockets.legacy.client import WebSocketClientProtocol
+
+    if not hasattr(WebSocketClientProtocol, "closed"):
+        WebSocketClientProtocol.closed = property(
+            lambda self: self.close_code is not None
+        )
+except Exception as e:
+    print("Patch skipped:", e)
+
+    
+# THEN rest of your imports
+import os
+import threading
+...
+from dhanhq import marketfeed
 
 
 import os
