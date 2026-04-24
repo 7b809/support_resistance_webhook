@@ -4,9 +4,9 @@ python-dotenv==1.2.2
 jinja2==3.1.6
 python-multipart==0.0.26
 pymongo==4.17.0
+dhanhq==2.0.2
 
 # keep modern version
-websockets>=12.0.1,<13
+websockets
 
-dhanhq==2.0.2
 aiohttp==3.9.5
