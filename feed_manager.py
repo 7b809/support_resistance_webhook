@@ -1,3 +1,14 @@
+# ✅ STEP 1: ADD THIS FIRST (TOP OF FILE)
+
+import websockets
+
+# 🔥 FIX dhanhq compatibility (MUST RUN BEFORE DhanFeed is used)
+if not hasattr(websockets.client.ClientConnection, "closed"):
+    websockets.client.ClientConnection.closed = property(
+        lambda self: self.close_code is not None
+    )
+
+
 import os
 import threading
 import asyncio
