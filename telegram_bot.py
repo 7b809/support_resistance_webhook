@@ -8,8 +8,17 @@ from datetime import datetime
 from authentication import generate_access_token
 from config import is_token_valid, BOT_TOKEN, ALLOWED_CHAT_ID, load_keys
 from feed_manager import start_feed_thread
-
+from config import save_token_alert, load_token_alert
 from datetime import timedelta
+
+
+# -------------------------------------------------
+# 🔁 TOKEN ALERT STATE
+# -------------------------------------------------
+TOKEN_ALERT_SENT = False
+LAST_ALERT_TIME = 0
+ALERT_INTERVAL = 3600  # 1 hour
+
 
 # -------------------------------------------------
 # ✅ LOG CONTROL (NEW)
@@ -323,6 +332,16 @@ def telegram_listener():
                         continue
 
                     if result.get("status") == "success":
+
+                        # ✅ RESET ALERT STATE AFTER LOGIN
+                        save_token_alert({
+                            "last_alert_time": None,
+                            "alert_active": False,
+                            "alert_count": 0,
+                            "last_token_generated_time": datetime.utcnow().isoformat()
+                        })
+
+
                         log("✅ Token generated successfully")
                         send_message("✅ Token generated successfully")
 
@@ -373,39 +392,78 @@ def telegram_listener():
 # 🕒 AUTO BALANCE CHECK (EVERY 1 HOUR)
 # -------------------------------------------------
 def balance_monitor():
-    print("⏱️ Balance monitor started (1 hour interval)")
+    print("⏱️ Balance monitor started (DB mode)")
 
     while True:
         try:
-            print("🔍 Checking token + balance...")
+            now = datetime.utcnow()
 
-            # 1️⃣ Check token
+            state = load_token_alert()
+
+            last_alert_time = state.get("last_alert_time")
+            alert_active = state.get("alert_active", False)
+
+            # convert string → datetime
+            if last_alert_time:
+                last_alert_time = datetime.fromisoformat(last_alert_time)
+
+            # -------------------------------------------------
+            # ❌ TOKEN INVALID
+            # -------------------------------------------------
             if not is_token_valid():
-                send_message("⚠️ Token expired. Please login using TOTP.")
-                time.sleep(3600)
+
+                should_alert = False
+
+                if not alert_active:
+                    should_alert = True
+                elif last_alert_time:
+                    diff = (now - last_alert_time).total_seconds()
+                    if diff >= 3600:
+                        should_alert = True
+
+                if should_alert:
+                    send_message(
+                        "⚠️ Token expired.\n"
+                        "👉 Please login using TOTP."
+                    )
+
+                    save_token_alert({
+                        "last_alert_time": now.isoformat(),
+                        "alert_active": True,
+                        "alert_count": state.get("alert_count", 0) + 1
+                    })
+
+                time.sleep(60)
                 continue
 
-            # 2️⃣ Fetch balance
+            # -------------------------------------------------
+            # ✅ TOKEN FIXED
+            # -------------------------------------------------
+            if alert_active:
+                send_message("✅ Token restored. System resumed.")
+
+                save_token_alert({
+                    "last_alert_time": None,
+                    "alert_active": False,
+                    "alert_count": 0,
+                    "last_token_generated_time": now.isoformat()
+                })
+
+            # -------------------------------------------------
+            # 💰 BALANCE CHECK
+            # -------------------------------------------------
             fund = get_fund_limit()
 
-            # 🔴 If API fails → assume session expired
             if not fund:
-                # retry once (important to avoid false alert)
                 time.sleep(10)
                 fund = get_fund_limit()
 
             if not fund:
-                send_message(
-                    "🚨 Session expired or API failed.\n"
-                    "👉 Please login again using TOTP."
-                )
-            else:
-                log("✅ Balance check OK")
+                send_message("🚨 API issue. Please check login.")
 
         except Exception as e:
-            print(f"❌ Balance monitor error: {e}")
+            print(f"❌ Monitor error: {e}")
 
-        # ⏳ wait 1 hour
         time.sleep(3600)
 
 # -------------------------------------------------

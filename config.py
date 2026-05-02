@@ -86,6 +86,17 @@ if MONGO_URI and MongoClient:
 else:
     log("MongoDB not configured (MONGO_URI missing)", "WARN")
 
+# -------------------------------------------------
+# 🔁 TOKEN ALERT COLLECTION
+# -------------------------------------------------
+token_alert_collection = None
+
+if mongo_client:
+    try:
+        token_alert_collection = mongo_client[MONGO_DB_NAME]["token_alerts"]
+        log("Token alert collection ready", "INFO")
+    except Exception as e:
+        log(f"Token alert collection error: {e}", "ERROR")
 
 # -------------------------------------------------
 # LOAD KEYS (Mongo → File fallback)
@@ -247,3 +258,35 @@ def load_instruments():
     except Exception as e:
         log(f"Load instruments error: {e}", "ERROR")
         return []
+    
+
+# -------------------------------------------------
+# SAVE TOKEN ALERT STATE
+# -------------------------------------------------
+def save_token_alert(data):
+    if not token_alert_collection:
+        return
+
+    try:
+        token_alert_collection.update_one(
+            {"_id": "token_alert"},
+            {"$set": data},
+            upsert=True
+        )
+    except Exception as e:
+        log(f"Save token alert error: {e}", "ERROR")
+
+
+# -------------------------------------------------
+# LOAD TOKEN ALERT STATE
+# -------------------------------------------------
+def load_token_alert():
+    if not token_alert_collection:
+        return {}
+
+    try:
+        data = token_alert_collection.find_one({"_id": "token_alert"})
+        return data if data else {}
+    except Exception as e:
+        log(f"Load token alert error: {e}", "ERROR")
+        return {}    
