@@ -288,7 +288,7 @@ def load_instruments():
 # SAVE TOKEN ALERT STATE
 # -------------------------------------------------
 def save_token_alert(data):
-    if not token_alert_collection:
+    if token_alert_collection is None:
         return
 
     try:
@@ -305,7 +305,7 @@ def save_token_alert(data):
 # LOAD TOKEN ALERT STATE
 # -------------------------------------------------
 def load_token_alert():
-    if not token_alert_collection:
+    if token_alert_collection is None:
         return {}
 
     try:
