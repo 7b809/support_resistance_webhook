@@ -6,10 +6,12 @@ import asyncio, os
 from datetime import datetime
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-
+from feed_manager import add_instruments, SUBSCRIBERS
+from feed_manager import LIVE_FEED
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
 from telegram_bot import start_telegram_bot
+from services import get_option_by_strike
 
 from feed_manager import (
     ALLOWED_SECURITIES,
@@ -280,6 +282,124 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
         log(f"WebSocket error: {e}", "ERROR")
         try:
             await ws.close()
+        except:
+            pass
+
+@app.websocket("/ws/option/{security_id}/{strike}/{opt_type}/{mode}")
+async def websocket_option_handler(ws: WebSocket, security_id: int, strike: float, opt_type: str, mode: str):
+
+    async def send_error(message, code=1008):
+        if not ws.client_state.name == "CONNECTED":
+            await ws.accept()
+        await ws.send_json({
+            "status": "error",
+            "message": message
+        })
+        await ws.close(code=code)
+
+    try:
+        # -----------------------------
+        # 🔐 TOKEN CHECK
+        # -----------------------------
+        if not is_token_valid():
+            await send_error("Token invalid or expired")
+            return
+
+        # -----------------------------
+        # 🛑 MODE VALIDATION
+        # -----------------------------
+        if mode not in ("ticker", "quote"):
+            await send_error(f"Invalid mode: {mode}. Use 'ticker' or 'quote'")
+            return
+
+        # -----------------------------
+        # 🎯 STEP 1: Get option contract
+        # -----------------------------
+        try:
+            result = get_option_by_strike(security_id, strike, opt_type.upper())
+        except Exception as e:
+            await send_error(f"Error fetching option data: {str(e)}")
+            return
+
+        if not result or "error" in result:
+            await send_error(result.get("error", "Failed to fetch option contract"))
+            return
+
+        option_sid = str(result["security_id"])
+
+        log(f"Dynamic WS → Strike {strike} {opt_type} → SID {option_sid}")
+
+        # -----------------------------
+        # 📡 STEP 2: Subscribe dynamically
+        # -----------------------------
+
+        instrument = ("NSE_FNO", option_sid, mode)
+
+
+        if not LIVE_FEED:
+            await send_error("Feed not ready. Try again.")
+            return
+
+        try:
+            add_instruments([instrument])
+        except Exception as e:
+            await send_error(f"Subscription failed: {str(e)}", code=1011)
+            return
+
+        key = (option_sid, mode)
+
+        # wait until feed_manager initializes subscriber bucket
+        for _ in range(10):
+            if key in SUBSCRIBERS:
+                break
+            await asyncio.sleep(0.2)
+
+        if key not in SUBSCRIBERS:
+            await send_error("Subscription not initialized in feed manager", code=1011)
+            return
+
+        # -----------------------------
+        # 🔗 STEP 3: Attach WebSocket
+        # -----------------------------
+        await ws.accept()
+
+        # ✅ Send initial success payload
+        await ws.send_json({
+            "status": "connected",
+            "security_id": option_sid,
+            "strike": strike,
+            "type": opt_type.upper(),
+            "mode": mode
+        })
+
+        loop = asyncio.get_running_loop()
+
+        def sender(message):
+            try:
+                asyncio.run_coroutine_threadsafe(
+                    ws.send_json({
+                        "status": "data",
+                        "payload": message
+                    }),
+                    loop,
+                )
+            except Exception as e:
+                log(f"WS send error: {e}", "ERROR")
+
+        SUBSCRIBERS[key].add(sender)
+
+        try:
+            while True:
+                await ws.receive_text()
+
+        except WebSocketDisconnect:
+            SUBSCRIBERS[key].discard(sender)
+            log(f"WS disconnected → {option_sid} {mode}")
+
+    except Exception as e:
+        log(f"Dynamic WS error: {e}", "ERROR")
+        try:
+            await send_error(f"Internal server error: {str(e)}", code=1011)
         except:
             pass
 

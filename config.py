@@ -98,6 +98,30 @@ if mongo_client:
     except Exception as e:
         log(f"Token alert collection error: {e}", "ERROR")
 
+
+
+
+# -------------------------------------------------
+# 📊 OPTION CACHE COLLECTION (NEW)
+# -------------------------------------------------
+option_cache_collection = None
+
+if mongo_client:
+    try:
+        option_cache_collection = mongo_client[MONGO_DB_NAME]["option_cache"]
+
+        # ✅ Index for fast lookup
+        option_cache_collection.create_index(
+            [("security_id", 1), ("strike", 1), ("type", 1), ("date", 1)],
+            unique=True
+        )
+
+        log("Option cache collection ready", "INFO")
+
+    except Exception as e:
+        log(f"Option cache init error: {e}", "ERROR")
+
+        
 # -------------------------------------------------
 # LOAD KEYS (Mongo → File fallback)
 # -------------------------------------------------
