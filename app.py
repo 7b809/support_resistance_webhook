@@ -53,12 +53,12 @@ def log(msg, level="INFO"):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    # do not remove this we commenting this for temperory
-    # try:
-    #     log("Starting Telegram bot...")
-    #     start_telegram_bot()
-    # except Exception as e:
-    #     log(f"Telegram bot start error: {e}", "ERROR")
+    # do not remove this we commenting this for temperory if not commented
+    try:
+        log("Starting Telegram bot...")
+        start_telegram_bot()
+    except Exception as e:
+        log(f"Telegram bot start error: {e}", "ERROR")
 
     try:
         if is_token_valid():

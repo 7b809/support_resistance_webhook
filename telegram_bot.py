@@ -369,13 +369,59 @@ def telegram_listener():
             print(f"❌ Listener loop error: {e}")
             time.sleep(5)
 
+# -------------------------------------------------
+# 🕒 AUTO BALANCE CHECK (EVERY 1 HOUR)
+# -------------------------------------------------
+def balance_monitor():
+    print("⏱️ Balance monitor started (1 hour interval)")
+
+    while True:
+        try:
+            print("🔍 Checking token + balance...")
+
+            # 1️⃣ Check token
+            if not is_token_valid():
+                send_message("⚠️ Token expired. Please login using TOTP.")
+                time.sleep(3600)
+                continue
+
+            # 2️⃣ Fetch balance
+            fund = get_fund_limit()
+
+            # 🔴 If API fails → assume session expired
+            if not fund:
+                # retry once (important to avoid false alert)
+                time.sleep(10)
+                fund = get_fund_limit()
+
+            if not fund:
+                send_message(
+                    "🚨 Session expired or API failed.\n"
+                    "👉 Please login again using TOTP."
+                )
+            else:
+                log("✅ Balance check OK")
+
+        except Exception as e:
+            print(f"❌ Balance monitor error: {e}")
+
+        # ⏳ wait 1 hour
+        time.sleep(3600)
 
 # -------------------------------------------------
 # START BOT THREAD
 # -------------------------------------------------
 def start_telegram_bot():
     try:
+        # ✅ Telegram listener
         thread = threading.Thread(target=telegram_listener, daemon=True)
         thread.start()
+
+        # ✅ NEW: balance monitor thread
+        monitor_thread = threading.Thread(target=balance_monitor, daemon=True)
+        monitor_thread.start()
+
+        print("✅ Telegram bot + Balance monitor started")
+
     except Exception as e:
         print(f"❌ Failed to start Telegram bot: {e}")
