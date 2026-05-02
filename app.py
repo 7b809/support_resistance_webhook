@@ -11,7 +11,8 @@ from feed_manager import LIVE_FEED
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
 from telegram_bot import start_telegram_bot
-from services import get_option_by_strike
+from services import get_option_by_strike,LOCAL_CACHE
+import feed_manager
 
 from feed_manager import (
     ALLOWED_SECURITIES,
@@ -191,19 +192,62 @@ def home():
         data = load_keys()
         expiry = data.get("expiryTime") if isinstance(data, dict) else None
 
+        # -----------------------------
+        # 🔥 FEED STATUS
+        # -----------------------------
+        feed_status = "running" if feed_manager.LIVE_FEED else "not_started"
+
+        # -----------------------------
+        # 📊 ACTIVE INSTRUMENTS
+        # -----------------------------
+        try:
+            instruments_data = get_current_instruments()
+            instruments = instruments_data.get("instruments", []) if instruments_data.get("status") == "success" else []
+            instrument_count = len(instruments)
+        except:
+            instrument_count = 0
+
+        # -----------------------------
+        # ⚡ CACHE STATUS
+        # -----------------------------
+        try:
+            cache_size = len(LOCAL_CACHE)
+        except:
+            cache_size = 0
+
+        # -----------------------------
+        # ✅ RESPONSE
+        # -----------------------------
         return {
             "status": "running",
             "message": "Dhan Market API is live",
+
+            # 🔐 Token
             "token_valid": is_token_valid(),
             "expiry_time": str(expiry) if expiry else "None",
+
+            # 📡 Feed
+            "feed_status": feed_status,
+
+            # 📊 Instruments
+            "active_instruments": instrument_count,
+
+            # ⚡ Cache
+            "cache_size": cache_size,
+
+            # 📌 Available
             "available_securities": list(ALLOWED_SECURITIES.keys()),
-            "websocket_example": "/ws/{security_id}/quote"
+
+            # 🔗 Examples
+            "websocket_examples": {
+                "basic": "/ws/13/quote",
+                "dynamic_option": "/ws/option/13/23400/ce/quote"
+            }
         }
 
     except Exception as e:
         log(f"Home endpoint error: {e}", "ERROR")
         return {"status": "error", "message": "Internal error"}
-
 
 # -------------------------------------------------
 # INFO
