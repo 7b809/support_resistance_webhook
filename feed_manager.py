@@ -34,7 +34,7 @@ RECONNECT_DELAY = 3
 # -------------------------------------------------
 TEST_LOG = os.getenv("PRINT_LOGS", "false").strip().lower() in ("true", "1", "yes")
 TEST_MODE = os.getenv("TEST_MODE", "false").strip().lower() in ("true", "1", "yes")
-
+LIVE_FEED = None
 # -------------------------------------------------
 # LOGGING
 # -------------------------------------------------
