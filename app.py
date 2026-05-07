@@ -514,7 +514,15 @@ def subscriptions():
 # -------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
-    return templates.TemplateResponse(
-        "index.html",
-        {"request": request}
+
+    response = templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={}
     )
+
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    return response
