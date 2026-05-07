@@ -37,7 +37,6 @@ jinja_env = Environment(
 
 templates = Jinja2Templates(env=jinja_env)
 
-templates.env.cache = {}   # 🔥 disable cache (fix)
 
 
 # -------------------------------------------------
