@@ -185,7 +185,7 @@ def generate_token(totp: str = Form(...)):
 # -------------------------------------------------
 # HOME
 # -------------------------------------------------
-@app.get("/")
+@app.get("/meta")
 def home():
     try:
         data = load_keys()
@@ -501,12 +501,12 @@ def subscriptions():
         return {"status": "error", "message": str(e)}
     
 
-
-@app.get("/ui", response_class=HTMLResponse)
-def ui(request: Request):
+# -------------------------------------------------
+# HOME PAGE
+# -------------------------------------------------
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request):
     return templates.TemplateResponse(
         "index.html",
-        {
-            "request": request
-        }
+        {"request": request}
     )

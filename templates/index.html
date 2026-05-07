@@ -369,7 +369,7 @@ async function loadDashboard(){
     }
 
     let home =
-        await fetch("/");
+        await fetch("/meta");
 
     let homeData =
         await home.json();
