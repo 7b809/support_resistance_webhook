@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+<meta charset="UTF-8">
+
+<meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+>
+
+<title>Dhan Dashboard</title>
+
+<link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+>
+
+<link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+>
+
+<style>
+
+body{
+    background:
+        linear-gradient(
+            135deg,
+            #eff6ff,
+            #dbeafe,
+            #f0fdf4
+        );
+
+    min-height:100vh;
+}
+
+.glass{
+
+    background:
+        rgba(255,255,255,0.7);
+
+    backdrop-filter:
+        blur(10px);
+
+    border-radius:20px;
+
+    box-shadow:
+        0 8px 24px rgba(0,0,0,0.08);
+}
+
+.feed-box{
+
+    background:#0f172a;
+
+    color:#f8fafc;
+
+    border-radius:14px;
+
+    padding:10px;
+
+    height:260px;
+
+    overflow:auto;
+
+    font-size:12px;
+}
+
+.feed-item{
+
+    background:
+        rgba(255,255,255,0.05);
+
+    border-left:
+        4px solid #38bdf8;
+
+    padding:8px;
+
+    margin-bottom:8px;
+
+    border-radius:10px;
+}
+
+.stat-value{
+    font-size:32px;
+    font-weight:700;
+}
+
+.live{
+    color:#16a34a;
+}
+
+.dead{
+    color:#dc2626;
+}
+
+.table thead{
+    background:#2563eb;
+    color:white;
+}
+
+pre{
+    color:white;
+    margin:0;
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="container py-4">
+
+    <!-- HEADER -->
+
+    <div
+        class="d-flex justify-content-between align-items-center mb-4"
+    >
+
+        <div>
+
+            <h1 class="fw-bold text-dark">
+                📡 Dhan Market Dashboard
+            </h1>
+
+            <p class="text-muted">
+                Live Websocket Monitoring
+            </p>
+
+        </div>
+
+        <div>
+
+            <span class="badge bg-success fs-6">
+                LIVE
+            </span>
+
+        </div>
+
+    </div>
+
+    <!-- STATS -->
+
+    <div class="row g-4">
+
+        <div class="col-md-3">
+
+            <div class="glass p-4">
+
+                <div class="text-muted">
+                    Feed
+                </div>
+
+                <div
+                    id="feedStatus"
+                    class="stat-value live"
+                >
+                    LIVE
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="glass p-4">
+
+                <div class="text-muted">
+                    Token
+                </div>
+
+                <div
+                    id="tokenStatus"
+                    class="stat-value"
+                >
+                    ...
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="glass p-4">
+
+                <div class="text-muted">
+                    Subscriptions
+                </div>
+
+                <div
+                    id="subCount"
+                    class="stat-value"
+                >
+                    0
+                </div>
+
+            </div>
+
+        </div>
+
+        <div class="col-md-3">
+
+            <div class="glass p-4">
+
+                <div class="text-muted">
+                    Cache
+                </div>
+
+                <div
+                    id="cacheSize"
+                    class="stat-value"
+                >
+                    0
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- TABLE -->
+
+    <div class="glass p-4 mt-4">
+
+        <h4 class="mb-3">
+            📊 Live Instruments
+        </h4>
+
+        <div class="table-responsive">
+
+            <table class="table align-middle">
+
+                <thead>
+
+                <tr>
+
+                    <th>Exchange</th>
+
+                    <th>Security ID</th>
+
+                    <th>Mode</th>
+
+                    <th>Status</th>
+
+                    <th>Live Feed</th>
+
+                </tr>
+
+                </thead>
+
+                <tbody id="instrumentTable"></tbody>
+
+            </table>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+const sockets = {};
+
+function mapMode(modeNum){
+
+    modeNum = Number(modeNum);
+
+    if(modeNum === 15)
+        return "ticker";
+
+    if(modeNum === 17)
+        return "quote";
+
+    if(modeNum === 19)
+        return "depth";
+
+    if(modeNum === 21)
+        return "full";
+
+    return "quote";
+}
+
+async function loadDashboard(){
+
+    let res =
+        await fetch("/subscriptions");
+
+    let data =
+        await res.json();
+
+    let tbody =
+        document.getElementById(
+            "instrumentTable"
+        );
+
+    tbody.innerHTML = "";
+
+    if(data.status === "success"){
+
+        document.getElementById(
+            "subCount"
+        ).innerText =
+            data.instruments.length;
+
+        for(let item of data.instruments){
+
+            let ex = item[0];
+
+            let sid = item[1];
+
+            let modeNum = item[2];
+
+            let mode =
+                mapMode(modeNum);
+
+            let row =
+                document.createElement("tr");
+
+            row.innerHTML = `
+
+                <td>
+                    <span class="badge bg-primary">
+                        ${ex}
+                    </span>
+                </td>
+
+                <td>
+                    <strong>${sid}</strong>
+                </td>
+
+                <td>
+                    <span class="badge bg-dark">
+                        ${mode}
+                    </span>
+                </td>
+
+                <td>
+                    <span
+                        class="badge bg-success"
+                        id="status-${sid}-${mode}"
+                    >
+                        LIVE
+                    </span>
+                </td>
+
+                <td>
+
+                    <div
+                        class="feed-box"
+                        id="feed-${sid}-${mode}"
+                    ></div>
+
+                </td>
+            `;
+
+            tbody.appendChild(row);
+
+            startSocket(
+                sid,
+                mode
+            );
+        }
+    }
+
+    let home =
+        await fetch("/");
+
+    let homeData =
+        await home.json();
+
+    document.getElementById(
+        "cacheSize"
+    ).innerText =
+        homeData.cache_size;
+
+    document.getElementById(
+        "tokenStatus"
+    ).innerHTML =
+        homeData.token_valid
+        ? `<span class="live">VALID</span>`
+        : `<span class="dead">INVALID</span>`;
+}
+
+function startSocket(
+    securityId,
+    mode
+){
+
+    let protocol =
+        location.protocol === "https:"
+        ? "wss"
+        : "ws";
+
+    let ws =
+        new WebSocket(
+            `${protocol}://${location.host}/ws/${securityId}/${mode}`
+        );
+
+    sockets[
+        `${securityId}-${mode}`
+    ] = ws;
+
+    ws.onmessage = function(event){
+
+        let data =
+            JSON.parse(event.data);
+
+        let box =
+            document.getElementById(
+                `feed-${securityId}-${mode}`
+            );
+
+        if(!box)
+            return;
+
+        let div =
+            document.createElement("div");
+
+        div.className =
+            "feed-item";
+
+        div.innerHTML =
+            `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+
+        box.prepend(div);
+
+        while(box.children.length > 15){
+
+            box.removeChild(
+                box.lastChild
+            );
+        }
+    };
+
+    ws.onopen = function(){
+
+        let badge =
+            document.getElementById(
+                `status-${securityId}-${mode}`
+            );
+
+        if(badge){
+
+            badge.innerText =
+                "CONNECTED";
+
+            badge.className =
+                "badge bg-success";
+        }
+    };
+
+    ws.onclose = function(){
+
+        let badge =
+            document.getElementById(
+                `status-${securityId}-${mode}`
+            );
+
+        if(badge){
+
+            badge.innerText =
+                "DISCONNECTED";
+
+            badge.className =
+                "badge bg-danger";
+        }
+
+        setTimeout(
+            () => startSocket(
+                securityId,
+                mode
+            ),
+            3000
+        );
+    };
+}
+
+loadDashboard();
+
+</script>
+
+</body>
+
+</html>

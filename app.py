@@ -503,6 +503,11 @@ def subscriptions():
     
 
 
-# @app.get("/ui", response_class=HTMLResponse)
-# def ui(request: Request):
-#     return templates.TemplateResponse("dashboard.html", {"request": request})    
+@app.get("/ui", response_class=HTMLResponse)
+def ui(request: Request):
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request
+        }
+    )
