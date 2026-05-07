@@ -24,20 +24,15 @@ from feed_manager import (
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-from jinja2 import Environment, FileSystemLoader
-from starlette.templating import Jinja2Templates
+
+from fastapi.templating import Jinja2Templates
 import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-jinja_env = Environment(
-    loader=FileSystemLoader(os.path.join(BASE_DIR, "templates")),
-    autoescape=True,
+templates = Jinja2Templates(
+    directory=os.path.join(BASE_DIR, "templates")
 )
-
-templates = Jinja2Templates(env=jinja_env)
-
-
 
 # -------------------------------------------------
 # ENV CONFIG
@@ -120,6 +115,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -------------------------------------------------
+# NO CACHE MIDDLEWARE
+# -------------------------------------------------
+@app.middleware("http")
+async def disable_cache(request: Request, call_next):
+
+    response = await call_next(request)
+
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    return response
 
 # # -------------------------------------------------
 # # MIDDLEWARE
