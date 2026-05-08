@@ -525,4 +525,4 @@ async def index(request: Request):
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
 
-    return response
+    return response 
