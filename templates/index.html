@@ -50,38 +50,6 @@ body{
         0 8px 24px rgba(0,0,0,0.08);
 }
 
-.feed-box{
-
-    background:#0f172a;
-
-    color:#f8fafc;
-
-    border-radius:14px;
-
-    padding:10px;
-
-    height:260px;
-
-    overflow:auto;
-
-    font-size:12px;
-}
-
-.feed-item{
-
-    background:
-        rgba(255,255,255,0.05);
-
-    border-left:
-        4px solid #38bdf8;
-
-    padding:8px;
-
-    margin-bottom:8px;
-
-    border-radius:10px;
-}
-
 .stat-value{
     font-size:32px;
     font-weight:700;
@@ -100,9 +68,46 @@ body{
     color:white;
 }
 
-pre{
-    color:white;
-    margin:0;
+.price-card{
+
+    background:
+        rgba(255,255,255,0.9);
+
+    border-radius:16px;
+
+    padding:14px;
+
+    border:
+        1px solid rgba(0,0,0,0.05);
+
+    min-width:220px;
+}
+
+.price-label{
+
+    font-size:12px;
+
+    color:#64748b;
+
+    font-weight:600;
+
+    letter-spacing:1px;
+}
+
+.price-value{
+
+    font-size:30px;
+
+    font-weight:700;
+
+    color:#16a34a;
+
+    line-height:1.1;
+}
+
+.copy-btn{
+
+    border-radius:12px;
 }
 
 </style>
@@ -247,7 +252,7 @@ pre{
 
                     <th>Status</th>
 
-                    <th>Live Feed</th>
+                    <th>Live Price</th>
 
                 </tr>
 
@@ -266,6 +271,8 @@ pre{
 <script>
 
 const sockets = {};
+
+const latestFeedData = {};
 
 function mapMode(modeNum){
 
@@ -336,25 +343,61 @@ async function loadDashboard(){
 
                 <td>
                     <span class="badge bg-dark">
-                        ${mode}
+                        ${mode.toUpperCase()}
                     </span>
                 </td>
 
                 <td>
+
                     <span
                         class="badge bg-success"
                         id="status-${sid}-${mode}"
                     >
-                        LIVE
+                        CONNECTING
                     </span>
+
                 </td>
 
                 <td>
 
                     <div
-                        class="feed-box"
-                        id="feed-${sid}-${mode}"
-                    ></div>
+                        class="price-card d-flex flex-column gap-3"
+                    >
+
+                        <div
+                            class="d-flex justify-content-between align-items-center"
+                        >
+
+                            <div>
+
+                                <div class="price-label">
+                                    LIVE PRICE
+                                </div>
+
+                                <div
+                                    id="price-${sid}-${mode}"
+                                    class="price-value"
+                                >
+                                    --
+                                </div>
+
+                            </div>
+
+                            <span class="badge bg-secondary">
+                                ${mode.toUpperCase()}
+                            </span>
+
+                        </div>
+
+                        <button
+                            class="btn btn-primary btn-sm copy-btn"
+                            onclick="copyLatest('${sid}','${mode}')"
+                        >
+                            <i class="bi bi-copy"></i>
+                            Copy Latest ${mode === "ticker" ? "Tick" : "Quote"}
+                        </button>
+
+                    </div>
 
                 </td>
             `;
@@ -411,30 +454,19 @@ function startSocket(
         let data =
             JSON.parse(event.data);
 
-        let box =
+        latestFeedData[
+            `${securityId}-${mode}`
+        ] = data;
+
+        let priceBox =
             document.getElementById(
-                `feed-${securityId}-${mode}`
+                `price-${securityId}-${mode}`
             );
 
-        if(!box)
-            return;
+        if(priceBox){
 
-        let div =
-            document.createElement("div");
-
-        div.className =
-            "feed-item";
-
-        div.innerHTML =
-            `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-
-        box.prepend(div);
-
-        while(box.children.length > 15){
-
-            box.removeChild(
-                box.lastChild
-            );
+            priceBox.innerText =
+                data.LTP || "--";
         }
     };
 
@@ -479,6 +511,34 @@ function startSocket(
             3000
         );
     };
+}
+
+function copyLatest(
+    securityId,
+    mode
+){
+
+    let data =
+        latestFeedData[
+            `${securityId}-${mode}`
+        ];
+
+    if(!data){
+
+        alert(
+            "No live data yet"
+        );
+
+        return;
+    }
+
+    navigator.clipboard.writeText(
+        JSON.stringify(data, null, 2)
+    );
+
+    alert(
+        `${mode.toUpperCase()} copied`
+    );
 }
 
 loadDashboard();
