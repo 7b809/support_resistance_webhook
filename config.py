@@ -86,6 +86,131 @@ if MONGO_URI and MongoClient:
 else:
     log("MongoDB not configured (MONGO_URI missing)", "WARN")
 
+import json
+import os
+from datetime import datetime
+from dotenv import load_dotenv
+
+# ✅ Mongo import
+try:
+    from pymongo import MongoClient
+except:
+    MongoClient = None
+
+
+# =====================================================
+# LOAD ENV
+# =====================================================
+load_dotenv()
+
+
+# =====================================================
+# ENV CONFIG
+# =====================================================
+MONGO_URI = os.getenv("MONGO_URI")
+
+# ✅ OPTION CHAIN DB/COLLECTION
+MONGO_OPTION_CHAIN_DB = os.getenv("MONGO_OPTION_CHAIN_DB")
+MONGO_OPTION_CHAIN_COLLECTION = os.getenv("MONGO_OPTION_CHAIN_COLLECTION")
+
+# ✅ OUTPUT FILE
+OUTPUT_JSON_FILE = "data.json"
+
+# ✅ PRINT LOGS
+PRINT_LOGS = True
+
+
+# =====================================================
+# LOG HELPER
+# =====================================================
+def log(msg, level="INFO"):
+
+    if PRINT_LOGS:
+        print(f"[{level}] {msg}")
+
+
+# =====================================================
+# MONGO INIT
+# =====================================================
+mongo_client = None
+option_chain_collection = None
+
+if not MongoClient:
+    log("pymongo not installed", "ERROR")
+    exit()
+
+if not MONGO_URI:
+    log("MONGO_URI missing in .env", "ERROR")
+    exit()
+
+try:
+
+    # ✅ CONNECT MONGO
+    mongo_client = MongoClient(MONGO_URI)
+
+    # ✅ DB
+    db = mongo_client[MONGO_OPTION_CHAIN_DB]
+
+    # ✅ COLLECTION
+    option_chain_collection = db[MONGO_OPTION_CHAIN_COLLECTION]
+
+    log(f"Mongo Connected", "INFO")
+    log(f"DB → {MONGO_OPTION_CHAIN_DB}", "INFO")
+    log(f"Collection → {MONGO_OPTION_CHAIN_COLLECTION}", "INFO")
+
+except Exception as e:
+
+    log(f"Mongo connection error: {e}", "ERROR")
+    exit()
+
+
+# =====================================================
+# BSON SERIALIZER
+# =====================================================
+def serialize_doc(doc):
+
+    # ✅ Convert ObjectId
+    if "_id" in doc:
+        doc["_id"] = str(doc["_id"])
+
+    # ✅ Convert datetime
+    for key, value in doc.items():
+
+        if isinstance(value, datetime):
+            doc[key] = value.isoformat()
+
+    return doc
+
+
+# =====================================================
+# FETCH & SAVE DATA
+# =====================================================
+def export_option_chain_to_json():
+
+    try:
+
+        log("Fetching MongoDB data...", "INFO")
+
+        # ✅ FETCH ALL DOCUMENTS
+        data = list(option_chain_collection.find())
+
+        log(f"Documents fetched → {len(data)}", "INFO")
+
+        # ✅ SERIALIZE
+        serialized_data = [
+            serialize_doc(doc)
+            for doc in data
+        ]
+
+        return serialized_data
+
+
+    except Exception as e:
+
+        log(f"Export error: {e}", "ERROR")
+
+
+
 # -------------------------------------------------
 # 🔁 TOKEN ALERT COLLECTION
 # -------------------------------------------------

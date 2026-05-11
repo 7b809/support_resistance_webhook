@@ -11,15 +11,16 @@ from feed_manager import LIVE_FEED
 from config import load_keys, is_token_valid
 from authentication import generate_access_token
 from telegram_bot import start_telegram_bot
-from services import get_option_by_strike,LOCAL_CACHE
+from services import get_option_by_strike, LOCAL_CACHE
 import feed_manager
+from daily_option_scheduler import start_option_scheduler
+
 
 from feed_manager import (
     ALLOWED_SECURITIES,
     SUBSCRIBERS,
     start_feed_thread,
     get_current_instruments,
-    
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,76 +31,142 @@ import os
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-templates = Jinja2Templates(
-    directory=os.path.join(BASE_DIR, "templates")
-)
+templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 # -------------------------------------------------
 # ENV CONFIG
 # -------------------------------------------------
 APP_LOGS = os.getenv("PRINT_LOGS", "false").strip().lower() in ("true", "1", "yes")
 TEST_MODE = os.getenv("TEST_MODE", "false").strip().lower() in ("true", "1", "yes")
+
+
 def log(msg, level="INFO"):
     if APP_LOGS:
         print(f"[APP {level} {datetime.now().strftime('%H:%M:%S')}] {msg}")
- 
 
+
+# -------------------------------------------------
+# LIFESPAN
+# -------------------------------------------------
 # -------------------------------------------------
 # LIFESPAN
 # -------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
 
-    # do not remove this we commenting this for temperory if not commented
+    # -------------------------------------------------
+    # 🤖 TELEGRAM BOT
+    # -------------------------------------------------
     try:
+
         log("Starting Telegram bot...")
+
         start_telegram_bot()
+
     except Exception as e:
+
         log(f"Telegram bot start error: {e}", "ERROR")
 
+    # -------------------------------------------------
+    # 📡 FEED START
+    # -------------------------------------------------
     try:
+
         if is_token_valid():
+
             log("Token valid → starting feed")
+
+            # ✅ START FEED THREAD
             start_feed_thread()
 
-            # ✅ NEW: wait & log instruments
+            # -------------------------------------------------
+            # 🕒 START DAILY OPTION SCHEDULER
+            # -------------------------------------------------
+            try:
+
+                log("Starting daily option scheduler...")
+
+                start_option_scheduler()
+
+                log("Daily option scheduler started")
+
+            except Exception as scheduler_err:
+
+                log(f"Option scheduler start error: {scheduler_err}", "ERROR")
+
+            # -------------------------------------------------
+            # 📊 LOG ACTIVE INSTRUMENTS
+            # -------------------------------------------------
             if APP_LOGS:
 
                 async def log_instruments():
-                    await asyncio.sleep(3)  # 🔥 increase wait (important)
+
+                    # ✅ wait for feed startup
+                    await asyncio.sleep(3)
 
                     try:
+
                         data = get_current_instruments()
 
                         if data.get("status") != "success":
+
                             log("Feed not ready yet (skip logging)", "WARN")
+
                             return
 
                         instruments = data.get("instruments", [])
+
                         count = len(instruments)
 
                         log(f"Active Instruments Loaded → {count}")
 
+                        # -----------------------------------------
+                        # SMALL COUNT
+                        # -----------------------------------------
                         if count <= 10:
+
                             for ex, sid, typ in instruments:
-                                log(f"Instrument → EX:{ex} | SID:{sid} | TYPE:{typ}")
+
+                                log(
+                                    f"Instrument → "
+                                    f"EX:{ex} | "
+                                    f"SID:{sid} | "
+                                    f"TYPE:{typ}"
+                                )
+
+                        # -----------------------------------------
+                        # LARGE COUNT
+                        # -----------------------------------------
                         else:
+
                             security_ids = sorted({sid for _, sid, _ in instruments})
-                            log(f"Security IDs → {security_ids}")
+
+                            log(f"Security IDs → " f"{security_ids}")
 
                     except Exception as e:
-                        log(f"Startup instrument log error: {e}", "ERROR")
 
+                        log(f"Startup instrument log error: {e}", "ERROR")
 
                 asyncio.create_task(log_instruments())
 
         else:
+
             log("Waiting for TOTP from Telegram...", "WARN")
 
     except Exception as e:
+
         log(f"Feed start error: {e}", "ERROR")
 
+    # -------------------------------------------------
+    # APP RUNNING
+    # -------------------------------------------------
     yield
+
+    # -------------------------------------------------
+    # SHUTDOWN
+    # -------------------------------------------------
+    log("Application shutdown initiated")
+
 
 app = FastAPI(
     title="Dhan Market Dashboard",
@@ -115,6 +182,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # -------------------------------------------------
 # NO CACHE MIDDLEWARE
 # -------------------------------------------------
@@ -128,6 +196,7 @@ async def disable_cache(request: Request, call_next):
     response.headers["Expires"] = "0"
 
     return response
+
 
 # # -------------------------------------------------
 # # MIDDLEWARE
@@ -153,7 +222,7 @@ async def disable_cache(request: Request, call_next):
 #     except Exception as e:
 #         log(f"Middleware error: {e}", "ERROR")
 #         return HTMLResponse(content="❌ Internal Server Error", status_code=500)
-    
+
 
 # -------------------------------------------------
 # TOKEN PAGE
@@ -179,7 +248,7 @@ def generate_token(totp: str = Form(...)):
             log(f"Token generation failed: {result['message']}", "ERROR")
             return HTMLResponse(
                 content=f"<h3 style='color:red'>Error: {result['message']}</h3>",
-                status_code=400
+                status_code=400,
             )
 
         log("Token refreshed successfully")
@@ -209,7 +278,11 @@ def home():
         # -----------------------------
         try:
             instruments_data = get_current_instruments()
-            instruments = instruments_data.get("instruments", []) if instruments_data.get("status") == "success" else []
+            instruments = (
+                instruments_data.get("instruments", [])
+                if instruments_data.get("status") == "success"
+                else []
+            )
             instrument_count = len(instruments)
         except:
             instrument_count = 0
@@ -228,33 +301,28 @@ def home():
         return {
             "status": "running",
             "message": "Dhan Market API is live",
-
             # 🔐 Token
             "token_valid": is_token_valid(),
             "expiry_time": str(expiry) if expiry else "None",
-
             # 📡 Feed
             "feed_status": feed_status,
-
             # 📊 Instruments
             "active_instruments": instrument_count,
-
             # ⚡ Cache
             "cache_size": cache_size,
-
             # 📌 Available
             "available_securities": list(ALLOWED_SECURITIES.keys()),
-
             # 🔗 Examples
             "websocket_examples": {
                 "basic": "/ws/13/quote",
-                "dynamic_option": "/ws/option/13/23400/ce/quote"
-            }
+                "dynamic_option": "/ws/option/13/23400/ce/quote",
+            },
         }
 
     except Exception as e:
         log(f"Home endpoint error: {e}", "ERROR")
         return {"status": "error", "message": "Internal error"}
+
 
 # -------------------------------------------------
 # INFO
@@ -298,7 +366,6 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
         # allow dynamic instruments also
         if (security_id, mode) not in SUBSCRIBERS:
             log(f"WS requested for non-subscribed instrument → {security_id}", "WARN")
-            
 
             log(f"Invalid WS request → {security_id} {mode}", "WARN")
             await ws.close(code=1008)
@@ -336,16 +403,16 @@ async def websocket_handler(ws: WebSocket, security_id: str, mode: str):
         except:
             pass
 
+
 @app.websocket("/ws/option/{security_id}/{strike}/{opt_type}/{mode}")
-async def websocket_option_handler(ws: WebSocket, security_id: int, strike: float, opt_type: str, mode: str):
+async def websocket_option_handler(
+    ws: WebSocket, security_id: int, strike: float, opt_type: str, mode: str
+):
 
     async def send_error(message, code=1008):
         if not ws.client_state.name == "CONNECTED":
             await ws.accept()
-        await ws.send_json({
-            "status": "error",
-            "message": message
-        })
+        await ws.send_json({"status": "error", "message": message})
         await ws.close(code=code)
 
     try:
@@ -386,7 +453,6 @@ async def websocket_option_handler(ws: WebSocket, security_id: int, strike: floa
 
         instrument = ("NSE_FNO", option_sid, mode)
 
-
         if not LIVE_FEED:
             await send_error("Feed not ready. Try again.")
             return
@@ -415,23 +481,22 @@ async def websocket_option_handler(ws: WebSocket, security_id: int, strike: floa
         await ws.accept()
 
         # ✅ Send initial success payload
-        await ws.send_json({
-            "status": "connected",
-            "security_id": option_sid,
-            "strike": strike,
-            "type": opt_type.upper(),
-            "mode": mode
-        })
+        await ws.send_json(
+            {
+                "status": "connected",
+                "security_id": option_sid,
+                "strike": strike,
+                "type": opt_type.upper(),
+                "mode": mode,
+            }
+        )
 
         loop = asyncio.get_running_loop()
 
         def sender(message):
             try:
                 asyncio.run_coroutine_threadsafe(
-                    ws.send_json({
-                        "status": "data",
-                        "payload": message
-                    }),
+                    ws.send_json({"status": "data", "payload": message}),
                     loop,
                 )
             except Exception as e:
@@ -494,6 +559,7 @@ async def unsubscribe(data: dict):
         log(f"Unsubscribe API error: {e}", "ERROR")
         return {"status": "error", "message": str(e)}
 
+
 # -------------------------------------------------
 # 📄 SUBSCRIPTIONS
 # -------------------------------------------------
@@ -507,7 +573,7 @@ def subscriptions():
     except Exception as e:
         log(f"Subscriptions API error: {e}", "ERROR")
         return {"status": "error", "message": str(e)}
-    
+
 
 # -------------------------------------------------
 # HOME PAGE
@@ -516,13 +582,11 @@ def subscriptions():
 async def index(request: Request):
 
     response = templates.TemplateResponse(
-        request=request,
-        name="index.html",
-        context={}
+        request=request, name="index.html", context={}
     )
 
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     response.headers["Pragma"] = "no-cache"
     response.headers["Expires"] = "0"
 
-    return response 
+    return response
